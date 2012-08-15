@@ -114,13 +114,13 @@ EdgeBasedGraphFactory::EdgeBasedGraphFactory(int nodes, std::vector<NodeBasedEdg
         edge.data.nameID = i->name();
         edge.data.type = i->type();
         edge.data.isAccessRestricted = i->isAccessRestricted();
-//        edge.data.edgeBasedNodeID = edges.size();
+        edge.data.edgeBasedNodeID = edges.size();
         edges.push_back( edge );
         if( edge.data.backward ) {
             std::swap( edge.source, edge.target );
             edge.data.forward = i->isBackward();
             edge.data.backward = i->isForward();
-//            edge.data.edgeBasedNodeID = edges.size();
+            edge.data.edgeBasedNodeID = edges.size();
             edges.push_back( edge );
         }
     }
@@ -134,6 +134,8 @@ EdgeBasedGraphFactory::EdgeBasedGraphFactory(int nodes, std::vector<NodeBasedEdg
 void EdgeBasedGraphFactory::GetEdgeBasedEdges(DeallocatingVector< EdgeBasedEdge >& outputEdgeList ) {
     GUARANTEE(0 == outputEdgeList.size(), "Vector passed to EdgeBasedGraphFactory::GetEdgeBasedEdges(..) is not empty");
     GUARANTEE(0 != edgeBasedEdges.size(), "No edges in edge based graph");
+
+    edgeBasedEdges.swap(outputEdgeList);
 }
 
 void EdgeBasedGraphFactory::GetEdgeBasedNodes( std::vector< EdgeBasedNode> & nodes) {
@@ -200,7 +202,7 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
     int numberOfSkippedTurns(0);
     int nodeBasedEdgeCounter(0);
     int triviallySkippedEdges(0);
-    int numberOfOriginalEdges(0);
+    unsigned numberOfOriginalEdges(0);
     
     std::ofstream originalEdgeDataOutFile(originalEdgeDataFilename, std::ios::binary);
 
@@ -295,24 +297,24 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
 
 
     Percent percent(edgesToInsert.size());
-
+    INFO("Before Contraction: " << _nodeBasedGraph->GetNumberOfEdges());
     //replace contractable edges
-    for(unsigned i = 0; i < 10; ++i) {
-        _nodeBasedGraph->DeleteEdge(edgesToRemove[2*i].first, edgesToRemove[2*i].second);
-        _nodeBasedGraph->DeleteEdge(edgesToRemove[2*i+1].first, edgesToRemove[2*i+1].second);
+//    for(unsigned i = 0; i < 10; ++i) {
+//        _nodeBasedGraph->DeleteEdge(edgesToRemove[2*i].first, edgesToRemove[2*i].second);
+//        _nodeBasedGraph->DeleteEdge(edgesToRemove[2*i+1].first, edgesToRemove[2*i+1].second);
+//
+//        INFO("->delete edge (" << edgesToRemove[2*i].first << "," << edgesToRemove[2*i].second << ")");
+//        INFO("->delete edge (" << edgesToRemove[2*i+1].first << "," << edgesToRemove[2*i+1].second << ")");
+//
+//        _NodeBasedEdge edge = edgesToInsert[i];
+//        INFO("  inserted edge (" << edge.source << "," << edge.target << ") " << i << "/" << edgesToInsert.size());
+//        assert(edge.source < _nodeBasedGraph->GetNumberOfNodes());
+//        assert(edge.target < _nodeBasedGraph->GetNumberOfNodes());
+//        _nodeBasedGraph->InsertEdge(edge.source, edge.target, edge.data);
+//        percent.printIncrement();
+//    }
 
-        INFO("->delete edge (" << edgesToRemove[2*i].first << "," << edgesToRemove[2*i].second << ")");
-        INFO("->delete edge (" << edgesToRemove[2*i+1].first << "," << edgesToRemove[2*i+1].second << ")");
-
-        _NodeBasedEdge edge = edgesToInsert[i];
-        INFO("  inserted edge (" << edge.source << "," << edge.target << ") " << i << "/" << edgesToInsert.size());
-        assert(edge.source < _nodeBasedGraph->GetNumberOfNodes());
-        assert(edge.target < _nodeBasedGraph->GetNumberOfNodes());
-        _nodeBasedGraph->InsertEdge(edge.source, edge.target, edge.data);
-        percent.printIncrement();
-    }
-
-    INFO("After Constraction: " << _nodeBasedGraph->GetNumberOfEdges());
+    INFO("After Contraction: " << _nodeBasedGraph->GetNumberOfEdges());
 
     unsigned edgeBasedNodeIDCounter = 0;
     //loop over graph and generate contigous(!) edgebasedNodeIDs
