@@ -201,20 +201,59 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
     Percent p(_nodeBasedGraph->GetNumberOfNodes());
     int numberOfSkippedTurns(0);
     int nodeBasedEdgeCounter(0);
-    int triviallySkippedEdges(0);
     unsigned numberOfOriginalEdges(0);
-    
     std::ofstream originalEdgeDataOutFile(originalEdgeDataFilename, std::ios::binary);
+    originalEdgeDataOutFile.write((char*)&numberOfOriginalEdges, sizeof(unsigned));
 
-    std::vector<std::pair<NodeID, NodeID> > edgesToRemove;
-    std::vector<_NodeBasedEdge > edgesToInsert;
+    int triviallySkippedEdges(0);
+    std::vector<NodeID> deletedNodes;
+
+    INFO("contracting trivial degree 2 nodes");
+    INFO("Before trivial contraction: " << _nodeBasedGraph->GetNumberOfEdges());
+
+    p.reinit(_nodeBasedGraph->GetNumberOfNodes());
+    //loop over all edges and generate new set of nodes.
+    //loop over graph and remove all trivially contractable edges.
+    for(_NodeBasedDynamicGraph::NodeIterator u = 0; u < _nodeBasedGraph->GetNumberOfNodes(); ++u ) {
+        for(_NodeBasedDynamicGraph::EdgeIterator e1 = _nodeBasedGraph->BeginEdges(u); e1 < _nodeBasedGraph->EndEdges(u); ++e1) {
+            _NodeBasedDynamicGraph::NodeIterator v = _nodeBasedGraph->GetTarget(e1);
+            const _NodeBasedDynamicGraph::EdgeData edgeData1 = _nodeBasedGraph->GetEdgeData(e1);
+            for(_NodeBasedDynamicGraph::EdgeIterator e2 = _nodeBasedGraph->BeginEdges(v); e2 < _nodeBasedGraph->EndEdges(v); ++e2) {
+                const _NodeBasedDynamicGraph::EdgeData edgeData2 = _nodeBasedGraph->GetEdgeData(e2);
+                _NodeBasedDynamicGraph::NodeIterator w = _nodeBasedGraph->GetTarget(e2);
+                double testAngle = GetAngleBetweenTwoEdges(inputNodeInfoList[u], inputNodeInfoList[v], inputNodeInfoList[w]);
+                if((testAngle > 179. && testAngle < 181.) && _nodeBasedGraph->GetOutDegree(v) <= 2 && edgeData1.nameID == edgeData2.nameID &&
+                        edgeData1.backward == edgeData2.backward && edgeData1.isAccessRestricted == edgeData2.isAccessRestricted) {
+
+                    //remove edges (u,v), (v,w)
+                    _nodeBasedGraph->DeleteEdgesTo(u, v);
+                    _nodeBasedGraph->DeleteEdgesTo(v, w);
+
+                    //add edge (v,w) with combined distance
+                    _NodeBasedEdgeData newEdgeData;
+                    newEdgeData = edgeData1; newEdgeData.distance += edgeData2.distance;
+                    ++triviallySkippedEdges;
+                    _nodeBasedGraph->InsertEdge(u, w, newEdgeData);
+                    deletedNodes.push_back(v);
+                }
+            }
+        }
+    }
+
+    INFO("After trivial contraction: " << _nodeBasedGraph->GetNumberOfEdges() << ", deleted " << deletedNodes.size() << " nodes");
+
+    std::sort(deletedNodes.begin(), deletedNodes.end());
+    deletedNodes.erase(std::unique(deletedNodes.begin(), deletedNodes.end()), deletedNodes.end());
+
+    /*****************/
 
     INFO("Identifying small components");
     //Run a BFS on the undirected graph and identify small components
     std::queue<std::pair<NodeID, NodeID> > bfsQueue;
     std::vector<unsigned> componentsIndex(_nodeBasedGraph->GetNumberOfNodes(), UINT_MAX);
+
     std::vector<NodeID> vectorOfComponentSizes;
-    unsigned currentComponent = 0, sizeOfCurrentComponent = 0, settledNodes = 0;
+    unsigned currentComponent = 0, sizeOfCurrentComponent = 0;
     //put unexplorered node with parent pointer into queue
     for(NodeID node = 0, endNodes = _nodeBasedGraph->GetNumberOfNodes(); node < endNodes; ++node) {
         if(UINT_MAX == componentsIndex[node]) {
@@ -265,56 +304,7 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
     }
     INFO("identified: " << vectorOfComponentSizes.size() << " many components");
 
-    p.reinit(_nodeBasedGraph->GetNumberOfNodes());
-    //loop over all edges and generate new set of nodes.
-    //loop over graph and remove all trivially contractable edges.
-    for(_NodeBasedDynamicGraph::NodeIterator u = 0; u < _nodeBasedGraph->GetNumberOfNodes(); ++u ) {
-        for(_NodeBasedDynamicGraph::EdgeIterator e1 = _nodeBasedGraph->BeginEdges(u); e1 < _nodeBasedGraph->EndEdges(u); ++e1) {
-            _NodeBasedDynamicGraph::NodeIterator v = _nodeBasedGraph->GetTarget(e1);
-            const _NodeBasedDynamicGraph::EdgeData edgeData1 = _nodeBasedGraph->GetEdgeData(e1);
-            for(_NodeBasedDynamicGraph::EdgeIterator e2 = _nodeBasedGraph->BeginEdges(v); e2 < _nodeBasedGraph->EndEdges(v); ++e2) {
-                //TODO: Nur vorwärts-kanten und bei ungerichteten kanten nur eine richtung einfügen. Vorsicht!
-                const _NodeBasedDynamicGraph::EdgeData edgeData2 = _nodeBasedGraph->GetEdgeData(e2);
-                _NodeBasedDynamicGraph::NodeIterator w = _nodeBasedGraph->GetTarget(e2);
-                double testAngle = GetAngleBetweenTwoEdges(inputNodeInfoList[u], inputNodeInfoList[v], inputNodeInfoList[w]);
-                if((testAngle > 179 && testAngle < 181) && _nodeBasedGraph->GetOutDegree(v) <= 2 && edgeData1.nameID == edgeData2.nameID &&
-                        edgeData1.backward == edgeData2.backward && edgeData1.isAccessRestricted == edgeData2.isAccessRestricted) {
-
-                    //remove edges (u,v), (v,w)
-                    edgesToRemove.push_back(std::make_pair(u,v));
-                    edgesToRemove.push_back(std::make_pair(v,w));
-
-                    //add edge (v,w) with combined distance
-                    _NodeBasedEdge newEdge;
-                    newEdge.source = u; newEdge.target = w;
-                    newEdge.data = edgeData1; newEdge.data.distance += edgeData2.distance;
-                    ++triviallySkippedEdges;
-                    edgesToInsert.push_back(newEdge);
-                }
-            }
-        }
-    }
-
-
-    Percent percent(edgesToInsert.size());
-    INFO("Before Contraction: " << _nodeBasedGraph->GetNumberOfEdges());
-    //replace contractable edges
-//    for(unsigned i = 0; i < 10; ++i) {
-//        _nodeBasedGraph->DeleteEdge(edgesToRemove[2*i].first, edgesToRemove[2*i].second);
-//        _nodeBasedGraph->DeleteEdge(edgesToRemove[2*i+1].first, edgesToRemove[2*i+1].second);
-//
-//        INFO("->delete edge (" << edgesToRemove[2*i].first << "," << edgesToRemove[2*i].second << ")");
-//        INFO("->delete edge (" << edgesToRemove[2*i+1].first << "," << edgesToRemove[2*i+1].second << ")");
-//
-//        _NodeBasedEdge edge = edgesToInsert[i];
-//        INFO("  inserted edge (" << edge.source << "," << edge.target << ") " << i << "/" << edgesToInsert.size());
-//        assert(edge.source < _nodeBasedGraph->GetNumberOfNodes());
-//        assert(edge.target < _nodeBasedGraph->GetNumberOfNodes());
-//        _nodeBasedGraph->InsertEdge(edge.source, edge.target, edge.data);
-//        percent.printIncrement();
-//    }
-
-    INFO("After Contraction: " << _nodeBasedGraph->GetNumberOfEdges());
+    /*********/
 
     unsigned edgeBasedNodeIDCounter = 0;
     //loop over graph and generate contigous(!) edgebasedNodeIDs
@@ -325,16 +315,19 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
         }
     }
 
-    INFO("Generating Edge-based Nodes");
+    INFO("generating edge-expanded nodes");
 
     //loop over all edges and generate new set of nodes.
     for(_NodeBasedDynamicGraph::NodeIterator u = 0; u < _nodeBasedGraph->GetNumberOfNodes(); ++u ) {
         for(_NodeBasedDynamicGraph::EdgeIterator e1 = _nodeBasedGraph->BeginEdges(u); e1 < _nodeBasedGraph->EndEdges(u); ++e1) {
             _NodeBasedDynamicGraph::NodeIterator v = _nodeBasedGraph->GetTarget(e1);
+            if(UINT_MAX == u || UINT_MAX == v)
+                continue;
             if(_nodeBasedGraph->GetEdgeData(e1).type != SHRT_MAX) {
                 assert(e1 != UINT_MAX);
                 assert(u != UINT_MAX);
                 assert(v != UINT_MAX);
+//                INFO("u: " << u << ", v: " << v << ", componentsIndex[u]: " << componentsIndex[u] << ", componentsIndex[v]: " << componentsIndex[v]);
                 //edges that end on bollard nodes may actually be in two distinct components
                 InsertEdgeBasedNode(e1, u, v, (std::min(vectorOfComponentSizes[componentsIndex[u]], vectorOfComponentSizes[componentsIndex[v]]) < 1000) );
             }
@@ -344,17 +337,22 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
     std::vector<NodeID>().swap(vectorOfComponentSizes);
     std::vector<NodeID>().swap(componentsIndex);
 
+    INFO("generating edge-expanded edges");
+
     //Loop over all turns and generate new set of edges.
     //Three nested loop look super-linear, but we are dealing with a linear number of turns only.
     for(_NodeBasedDynamicGraph::NodeIterator u = 0; u < _nodeBasedGraph->GetNumberOfNodes(); ++u ) {
         for(_NodeBasedDynamicGraph::EdgeIterator e1 = _nodeBasedGraph->BeginEdges(u); e1 < _nodeBasedGraph->EndEdges(u); ++e1) {
             ++nodeBasedEdgeCounter;
             _NodeBasedDynamicGraph::NodeIterator v = _nodeBasedGraph->GetTarget(e1);
+            if(UINT_MAX == u || UINT_MAX == v) //u and v may be UINT_MAX when they were (trivially) contracted
+                continue;
             //EdgeWeight heightPenalty = ComputeHeightPenalty(u, v);
             NodeID onlyToNode = CheckForEmanatingIsOnlyTurn(u, v);
             for(_NodeBasedDynamicGraph::EdgeIterator e2 = _nodeBasedGraph->BeginEdges(v); e2 < _nodeBasedGraph->EndEdges(v); ++e2) {
                 _NodeBasedDynamicGraph::NodeIterator w = _nodeBasedGraph->GetTarget(e2);
-
+                if(UINT_MAX == w) //w may be UINT_MAX when it was (trivially) contracted
+                    continue;
                 if(onlyToNode != UINT_MAX && w != onlyToNode) { //We are at an only_-restriction but not at the right turn.
                     ++numberOfSkippedTurns;
                     continue;
@@ -415,18 +413,14 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
     originalEdgeDataOutFile.write((char*)&numberOfOriginalEdges, sizeof(unsigned));
     originalEdgeDataOutFile.close();
 
-    INFO("Sorting edge-based Nodes");
+    INFO("sorting edge-expanded nodes");
     std::sort(edgeBasedNodes.begin(), edgeBasedNodes.end());
-    INFO("Removing duplicate nodes (if any)");
+    INFO("removing duplicate nodes (if any)");
     edgeBasedNodes.erase( std::unique(edgeBasedNodes.begin(), edgeBasedNodes.end()), edgeBasedNodes.end() );
-//    INFO("Applying vector self-swap trick to free up memory");
-//    INFO("size: " << edgeBasedNodes.size() << ", cap: " << edgeBasedNodes.capacity());
     std::vector<EdgeBasedNode>(edgeBasedNodes).swap(edgeBasedNodes);
-//    INFO("size: " << edgeBasedNodes.size() << ", cap: " << edgeBasedNodes.capacity());
-    INFO("Node-based graph contains " << nodeBasedEdgeCounter     << " edges");
-//    INFO("Edge-based graph contains " << edgeBasedEdges.size()    << " edges, blowup is " << 2*((double)edgeBasedEdges.size()/(double)nodeBasedEdgeCounter));
-    INFO("Edge-based graph skipped "  << numberOfSkippedTurns     << " turns, defined by " << numberOfTurnRestrictions << " restrictions.");
-    INFO("Generated " << edgeBasedNodes.size() << " edge based nodes");
+    INFO("node-based graph contains " << nodeBasedEdgeCounter     << " edges");
+    INFO("edge-expanded graph skipped "  << numberOfSkippedTurns     << " turns, defined by " << numberOfTurnRestrictions << " restrictions.");
+    INFO("generated " << edgeBasedNodes.size() << " edge-expanded nodes");
 }
 
 short EdgeBasedGraphFactory::AnalyzeTurn(const NodeID u, const NodeID v, const NodeID w) const {
