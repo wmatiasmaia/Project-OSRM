@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9.00"
-	Name="createHierarchy"
+	Name="contractor"
 	ProjectGUID="{38C3EEAC-032B-4BEA-BECB-C694A47AA7E2}"
-	RootNamespace="createHierarchy"
+	RootNamespace="contractor"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
 	>
@@ -189,7 +189,7 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath="..\createHierarchy.cpp"
+				RelativePath="..\contractor.cpp"
 				>
 			</File>
 		</Filter>
