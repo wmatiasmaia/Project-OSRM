@@ -42,18 +42,18 @@ extern "C" {
 #include <string>
 #include <vector>
 
-#include "Algorithms/IteratorBasedCRC32.h"
-#include "Util/OpenMPWrapper.h"
-#include "typedefs.h"
-#include "Contractor/Contractor.h"
-#include "Contractor/EdgeBasedGraphFactory.h"
-#include "DataStructures/BinaryHeap.h"
-#include "DataStructures/DeallocatingVector.h"
-#include "DataStructures/NNGrid.h"
-#include "DataStructures/QueryEdge.h"
-#include "Util/BaseConfiguration.h"
-#include "Util/InputFileUtil.h"
-#include "Util/GraphLoader.h"
+#include "../Algorithms/IteratorBasedCRC32.h"
+#include "../Util/OpenMPWrapper.h"
+#include "../typedefs.h"
+#include "Contractor.h"
+#include "EdgeBasedGraphFactory.h"
+#include "../DataStructures/BinaryHeap.h"
+#include "../DataStructures/DeallocatingVector.h"
+#include "../DataStructures/NNGrid.h"
+#include "../DataStructures/QueryEdge.h"
+#include "../Util/BaseConfiguration.h"
+#include "../Util/InputFileUtil.h"
+#include "../Util/GraphLoader.h"
 
 using namespace std;
 

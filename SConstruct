@@ -293,9 +293,9 @@ if not conf.CheckCXXHeader('boost/unordered_map.hpp'):
 #	print "tbb/task_scheduler_init.h not found. Exiting"
 #	Exit(-1)
 
-env.Program(target = 'osrm-extract', source = ["extractor.cpp", Glob('Util/*.cpp'), Glob('Extractor/*.cpp')])
-env.Program(target = 'osrm-prepare', source = ["contractor.cpp", Glob('Contractor/*.cpp'), Glob('Util/SRTMLookup/*.cpp'), Glob('Algorithms/*.cpp')])
-env.Program(target = 'osrm-routed', source = ["routed.cpp", 'Descriptors/DescriptionFactory.cpp', Glob('ThirdParty/*.cc'), Glob('Server/DataStructures/*.cpp')], CCFLAGS = env['CCFLAGS'] + ['-DROUTED'])
+env.Program(target = 'osrm-extract', source = [Glob('Extractor/*.cpp'), Glob('Util/*.cpp')])
+env.Program(target = 'osrm-prepare', source = [Glob('Contractor/*.cpp'), Glob('Util/SRTMLookup/*.cpp'), Glob('Algorithms/*.cpp')])
+env.Program(target = 'osrm-routed', source = [Glob('Server/*.cpp'), 'Descriptors/DescriptionFactory.cpp', Glob('ThirdParty/*.cc'), Glob('Server/DataStructures/*.cpp')], CCFLAGS = env['CCFLAGS'] + ['-DROUTED'])
 if GetOption('withtools') is not None:
 	env.Program(target = 'Tools/osrm-component', source = ["Tools/componentAnalysis.cpp"])
 env = conf.Finish()

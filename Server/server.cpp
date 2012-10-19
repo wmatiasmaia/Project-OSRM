@@ -26,21 +26,21 @@ or see http://www.gnu.org/licenses/agpl.txt.
 #include <boost/thread.hpp>
 #include <boost/bind.hpp>
 
-#include "Server/DataStructures/QueryObjectsStorage.h"
-#include "Server/ServerConfiguration.h"
-#include "Server/ServerFactory.h"
+#include "DataStructures/QueryObjectsStorage.h"
+#include "ServerConfiguration.h"
+#include "ServerFactory.h"
 
-#include "Plugins/HelloWorldPlugin.h"
-#include "Plugins/LocatePlugin.h"
-#include "Plugins/NearestPlugin.h"
-#include "Plugins/TimestampPlugin.h"
-#include "Plugins/ViaRoutePlugin.h"
+#include "../Plugins/HelloWorldPlugin.h"
+#include "../Plugins/LocatePlugin.h"
+#include "../Plugins/NearestPlugin.h"
+#include "../Plugins/TimestampPlugin.h"
+#include "../Plugins/ViaRoutePlugin.h"
 
-#include "Util/InputFileUtil.h"
-#include "Util/OpenMPWrapper.h"
+#include "../Util/InputFileUtil.h"
+#include "../Util/OpenMPWrapper.h"
 
 #ifndef _WIN32
-#include "Util/LinuxStackTrace.h"
+#include "../Util/LinuxStackTrace.h"
 #endif
 
 typedef http::RequestHandler RequestHandler;

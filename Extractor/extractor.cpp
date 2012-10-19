@@ -30,17 +30,17 @@ extern "C" {
 }
 #include <luabind/luabind.hpp>
 
-#include "typedefs.h"
-#include "Extractor/ExtractorCallbacks.h"
-#include "Extractor/ExtractionContainers.h"
-#include "Extractor/ExtractionHelperFunctions.h"
-#include "Extractor/ExtractorStructs.h"
-#include "Extractor/LuaUtil.h"
-#include "Extractor/PBFParser.h"
-#include "Extractor/XMLParser.h"
-#include "Util/BaseConfiguration.h"
-#include "Util/InputFileUtil.h"
-#include "Util/MachineInfo.h"
+#include "../typedefs.h"
+#include "ExtractorCallbacks.h"
+#include "ExtractionContainers.h"
+#include "ExtractionHelperFunctions.h"
+#include "ExtractorStructs.h"
+#include "LuaUtil.h"
+#include "PBFParser.h"
+#include "XMLParser.h"
+#include "../Util/BaseConfiguration.h"
+#include "../Util/InputFileUtil.h"
+#include "../Util/MachineInfo.h"
 
 typedef BaseConfiguration ExtractorConfiguration;
 
