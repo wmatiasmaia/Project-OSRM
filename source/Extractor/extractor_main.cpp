@@ -18,30 +18,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 or see http://www.gnu.org/licenses/agpl.txt.
  */
 
-#ifndef BASEPARSER_H_
-#define BASEPARSER_H_
+#include "extractor.h"
 
-#include <luabind/luabind.hpp>
-
-class Extractor;
-
-template<typename NodeT, typename RestrictionT, typename WayT>
-class BaseParser {
-public:
-    BaseParser(Extractor* extractor) : mExtractor(extractor) {};
-    virtual ~BaseParser() {};
-    virtual bool Init() = 0;
-    virtual bool Parse() = 0;
-
-    void report_errors(lua_State *L, int status) {
-        if ( status!=0 ) {
-            std::cerr << "-- " << lua_tostring(L, -1) << std::endl;
-            lua_pop(L, 1); // remove error message
-        }
+int main (int argc, char *argv[]) {
+	if(argc < 2) {
+        ERR("usage: \n" << argv[0] << " <file.osm/.osm.bz2/.osm.pbf> [<profile.lua>]");
     }
-
-protected:
-    Extractor*  mExtractor;
-};
-
-#endif /* BASEPARSER_H_ */
+	
+	Extractor* extractor = new Extractor( argv[1], (argc > 2 ? argv[2] : "profile.lua") );
+	extractor->extract();
+  	return 0;
+}

@@ -1,8 +1,36 @@
+/*
+    open source routing machine
+    Copyright (C) Dennis Luxen, others 2010
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU AFFERO General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+or see http://www.gnu.org/licenses/agpl.txt.
+ */
 
 #include "PBFParser.h"
+#include "Extractor.h"
+
+extern "C" {
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
+}
+#include <luabind/luabind.hpp>
 
 
-PBFParser::PBFParser(const char * fileName) : myLuaState(NULL) {
+PBFParser::PBFParser(Extractor* extractor, const char * fileName) :
+BaseParser(extractor) {
     GOOGLE_PROTOBUF_VERIFY_VERSION;
     //TODO: What is the bottleneck here? Filling the queue or reading the stuff from disk?
     threadDataQueue = boost::make_shared<ConcurrentQueue<_ThreadData*> >( 2500 ); /* Max 2500 items in queue, hardcoded. */
@@ -14,11 +42,6 @@ PBFParser::PBFParser(const char * fileName) : myLuaState(NULL) {
 
     blockCount = 0;
     groupCount = 0;
-
-    //Dummy initialization
-    wayCallback = NULL;
-    nodeCallback = NULL;
-    restrictionCallback = NULL;
 }
 
 PBFParser::~PBFParser() {
@@ -66,18 +89,6 @@ bool PBFParser::readPBFBlobHeader(std::fstream& stream, _ThreadData * threadData
     delete[] data;
     return true;
 }
- 
-bool PBFParser::RegisterCallbacks(bool (*nodeCallbackPointer)(_Node), bool (*restrictionCallbackPointer)(_RawRestrictionContainer), bool (*wayCallbackPointer)(_Way) ) {
-    nodeCallback = *nodeCallbackPointer;
-    wayCallback = *wayCallbackPointer;
-    restrictionCallback = *restrictionCallbackPointer;
-    return true;
-}
-
-void PBFParser::RegisterLUAState(lua_State *ml) {
-    myLuaState = ml;
-}
-
 
 bool PBFParser::Init() {
     _ThreadData initData;
@@ -203,11 +214,11 @@ void PBFParser::parseDenseNode(_ThreadData * threadData) {
         /** Pass the unpacked node to the LUA call back **/
         try {
             luabind::call_function<int>(
-                    myLuaState,
+                    mExtractor->getLuaState(),
                     "node_function",
                     boost::ref(n)
             );
-            if(!(*nodeCallback)(n))
+            if(!(mExtractor->parseNode)(n))
                 std::cerr << "[PBFParser] dense node not parsed" << std::endl;
         } catch (const luabind::error &er) {
             cerr << er.what() << endl;
@@ -295,7 +306,7 @@ void PBFParser::parseRelation(_ThreadData * threadData) {
             //                    cout << "node " << currentRestriction.viaNode;
             //                    cout << " to " << currentRestriction.to << endl;
             //                }
-            if(!(*restrictionCallback)(currentRestrictionContainer))
+            if(!mExtractor->parseRestriction(currentRestrictionContainer))
                 std::cerr << "[PBFParser] relation not parsed" << std::endl;
         }
     }
@@ -322,12 +333,12 @@ void PBFParser::parseWay(_ThreadData * threadData) {
             /** Pass the unpacked way to the LUA call back **/
             try {
                 luabind::call_function<int>(
-                    myLuaState,
+                    mExtractor->getLuaState(),
                     "way_function",
                     boost::ref(w),
                     w.path.size()
                 );
-                if(!(*wayCallback)(w)) {
+                if(!mExtractor->parseWay(w)) {
                     std::cerr << "[PBFParser] way not parsed" << std::endl;
                 }
             } catch (const luabind::error &er) {

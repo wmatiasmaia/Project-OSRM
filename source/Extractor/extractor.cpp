@@ -18,47 +18,33 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 or see http://www.gnu.org/licenses/agpl.txt.
  */
 
-#include <cstdlib>
-#include <iostream>
-#include <fstream>
-#include <string>
+#include "extractor.h"
 
-extern "C" {
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
-}
-#include <luabind/luabind.hpp>
-
-#include "../typedefs.h"
-#include "ExtractorCallbacks.h"
-#include "ExtractionContainers.h"
-#include "ExtractionHelperFunctions.h"
-#include "ExtractorStructs.h"
 #include "LuaUtil.h"
 #include "PBFParser.h"
 #include "XMLParser.h"
-#include "../Util/BaseConfiguration.h"
+
 #include "../Util/InputFileUtil.h"
 #include "../Util/MachineInfo.h"
 
-typedef BaseConfiguration ExtractorConfiguration;
+#include "ExtractionHelperFunctions.h"
 
-ExtractorCallbacks * extractCallBacks;
-//
-bool nodeFunction(_Node n);
-bool restrictionFunction(_RawRestrictionContainer r);
-bool wayFunction(_Way w);
 
-int main (int argc, char *argv[]) {
-    if(argc < 2) {
-        ERR("usage: \n" << argv[0] << " <file.osm/.osm.bz2/.osm.pbf> [<profile.lua>]");
-    }
+Extractor::Extractor(const char* fileName, const char* profileName) {
+	mFileName = fileName;
+	mProfileName = profileName;
+};
 
-    INFO("extracting data from input file " << argv[1]);
+lua_State* Extractor::getLuaState() {
+	return mLuaState;
+}
+
+void Extractor::extract() {
+
+    INFO("extracting data from input file " << mFileName);
     bool isPBF(false);
-    std::string outputFileName(argv[1]);
-    std::string restrictionsFileName(argv[1]);
+    std::string outputFileName(mFileName);
+    std::string restrictionsFileName(mFileName);
     std::string::size_type pos = outputFileName.find(".osm.bz2");
     if(pos==std::string::npos) {
         pos = outputFileName.find(".osm.pbf");
@@ -80,36 +66,72 @@ int main (int argc, char *argv[]) {
         }
     }
 
-    /*** Setup Scripting Environment ***/
+	setupLua();
+	checkRAM();
 
+    mStringMap[""] = 0;
+    BaseParser<_Node, _RawRestrictionContainer, _Way> * parser;
+    if(isPBF) {
+        parser = new PBFParser(this,mFileName.c_str());
+    } else {
+        parser = new XMLParser(this,mFileName.c_str());
+    }
+
+    if(!parser->Init())
+        INFO("Parser not initialized!");
+    parser->Parse();
+
+    unsigned amountOfRAM = 1;
+    mExternalMemory.PrepareData(outputFileName, restrictionsFileName, amountOfRAM);
+
+    mStringMap.clear();
+    delete parser;
+    INFO("[extractor] finished.");
+    std::cout << "\nRun:\n"
+                   "./osrm-prepare " << outputFileName << " " << restrictionsFileName << std::endl;
+}
+
+void Extractor::checkRAM() {	
+    unsigned installedRAM = GetPhysicalmemory(); 
+    if(installedRAM < 2048264) {
+        WARN("Machine has less than 2GB RAM.");
+    }
+/*    if(testDataFile("extractor.ini")) {
+        ExtractorConfiguration extractorConfig("extractor.ini");
+        unsigned memoryAmountFromFile = atoi(extractorConfig.GetParameter("Memory").c_str());
+        if( memoryAmountFromFile != 0 && memoryAmountFromFile <= installedRAM/(1024*1024))
+            amountOfRAM = memoryAmountFromFile;
+        INFO("Using " << amountOfRAM << " GB of RAM for buffers");
+    }
+	*/
+}
+
+void Extractor::setupLua() {
     // Create a new lua state
-    lua_State *myLuaState = luaL_newstate();
+    mLuaState = luaL_newstate();
 
     // Connect LuaBind to this lua state
-    luabind::open(myLuaState);
+    luabind::open(mLuaState);
 
     // Add our function to the state's global scope
-    luabind::module(myLuaState) [
+    luabind::module(mLuaState) [
       luabind::def("print", LUA_print<std::string>),
       luabind::def("parseMaxspeed", parseMaxspeed),
       luabind::def("durationIsValid", durationIsValid),
       luabind::def("parseDuration", parseDuration)
     ];
 
-    if(0 != luaL_dostring(
-      myLuaState,
-      "print('Initializing LUA engine')\n"
-    )) {
-        ERR(lua_tostring(myLuaState,-1)<< " occured in scripting block");
+    if( luaL_dostring( mLuaState, "print('Initializing LUA engine')\n" )!=0 ) {
+        ERR(lua_tostring(mLuaState,-1)<< " occured in scripting block");
     }
 
-    luabind::module(myLuaState) [
+    luabind::module(mLuaState) [
       luabind::class_<HashTable<std::string, std::string> >("keyVals")
       .def("Add", &HashTable<std::string, std::string>::Add)
       .def("Find", &HashTable<std::string, std::string>::Find)
     ];
 
-    luabind::module(myLuaState) [
+    luabind::module(mLuaState) [
       luabind::class_<ImportNode>("Node")
           .def(luabind::constructor<>())
           .def_readwrite("lat", &ImportNode::lat)
@@ -120,7 +142,7 @@ int main (int argc, char *argv[]) {
           .def_readwrite("tags", &ImportNode::keyVals)
     ];
 
-    luabind::module(myLuaState) [
+    luabind::module(mLuaState) [
       luabind::class_<_Way>("Way")
           .def(luabind::constructor<>())
           .def_readwrite("name", &_Way::name)
@@ -142,68 +164,64 @@ int main (int argc, char *argv[]) {
           ]
     ];
     // Now call our function in a lua script
-	INFO("Parsing speedprofile from " << (argc > 2 ? argv[2] : "profile.lua") );
-    if(0 != luaL_dofile(myLuaState, (argc > 2 ? argv[2] : "profile.lua") )) {
-        ERR(lua_tostring(myLuaState,-1)<< " occured in scripting block");
+	INFO("Parsing speedprofile from " << mProfileName );
+    if(0 != luaL_dofile(mLuaState, mProfileName.c_str() )) {
+        ERR(lua_tostring(mLuaState,-1)<< " occured in scripting block");
     }
 
     //open utility libraries string library;
-    luaL_openlibs(myLuaState);
-
-    /*** End of Scripting Environment Setup; ***/
-
-    unsigned amountOfRAM = 1;
-    unsigned installedRAM = GetPhysicalmemory(); 
-    if(installedRAM < 2048264) {
-        WARN("Machine has less than 2GB RAM.");
-    }
-/*    if(testDataFile("extractor.ini")) {
-        ExtractorConfiguration extractorConfig("extractor.ini");
-        unsigned memoryAmountFromFile = atoi(extractorConfig.GetParameter("Memory").c_str());
-        if( memoryAmountFromFile != 0 && memoryAmountFromFile <= installedRAM/(1024*1024))
-            amountOfRAM = memoryAmountFromFile;
-        INFO("Using " << amountOfRAM << " GB of RAM for buffers");
-    }
-	*/
-	
-    StringMap stringMap;
-    ExtractionContainers externalMemory;
-
-    stringMap[""] = 0;
-    extractCallBacks = new ExtractorCallbacks(&externalMemory, &stringMap);
-    BaseParser<_Node, _RawRestrictionContainer, _Way> * parser;
-    if(isPBF) {
-        parser = new PBFParser(argv[1]);
-    } else {
-        parser = new XMLParser(argv[1]);
-    }
-    parser->RegisterCallbacks(&nodeFunction, &restrictionFunction, &wayFunction);
-    parser->RegisterLUAState(myLuaState);
-
-    if(!parser->Init())
-        INFO("Parser not initialized!");
-    parser->Parse();
-
-    externalMemory.PrepareData(outputFileName, restrictionsFileName, amountOfRAM);
-
-    stringMap.clear();
-    delete parser;
-    delete extractCallBacks;
-    INFO("[extractor] finished.");
-    std::cout << "\nRun:\n"
-                   "./osrm-prepare " << outputFileName << " " << restrictionsFileName << std::endl;
-    return 0;
+    luaL_openlibs(mLuaState);	
 }
 
-bool nodeFunction(_Node n) {
-    extractCallBacks->nodeFunction(n);
+/** warning: caller needs to take care of synchronization! */
+bool Extractor::parseNode(_Node n) {
+    if(n.lat <= 85*100000 && n.lat >= -85*100000)
+        mExternalMemory.allNodes.push_back(n);
     return true;
 }
-bool restrictionFunction(_RawRestrictionContainer r) {
-    extractCallBacks->restrictionFunction(r);
+
+bool Extractor::parseRestriction(_RawRestrictionContainer r) {
+    mExternalMemory.restrictionsVector.push_back(r);
     return true;
 }
-bool wayFunction(_Way w) {
-    extractCallBacks->wayFunction(w);
+
+/** warning: caller needs to take care of synchronization! */
+bool Extractor::parseWay(_Way w) {
+    /*** Store name of way and split it into edge segments ***/
+
+    if ( w.speed > 0 ) { //Only true if the way is specified by the speed profile
+
+        //Get the unique identifier for the street name
+        const StringMap::const_iterator strit = mStringMap.find(w.name);
+        if(strit == mStringMap.end()) {
+            w.nameID = mExternalMemory.nameVector.size();
+            mExternalMemory.nameVector.push_back(w.name);
+            mStringMap.insert(StringMap::value_type(w.name, w.nameID));
+        } else {
+            w.nameID = strit->second;
+        }
+
+        if(fabs(-1. - w.speed) < FLT_EPSILON){
+            WARN("found way with bogus speed, id: " << w.id);
+            return true;
+        }
+        if(w.id == UINT_MAX) {
+            WARN("found way with unknown type: " << w.id);
+            return true;
+        }
+
+        if ( w.direction == _Way::opposite ){
+            std::reverse( w.path.begin(), w.path.end() );
+        }
+
+        for(vector< NodeID >::size_type n = 0; n < w.path.size()-1; ++n) {
+            mExternalMemory.allEdges.push_back(_Edge(w.path[n], w.path[n+1], w.type, w.direction, w.speed, w.nameID, w.roundabout, w.ignoreInGrid, w.isDurationSet, w.isAccessRestricted));
+            mExternalMemory.usedNodeIDs.push_back(w.path[n]);
+        }
+        mExternalMemory.usedNodeIDs.push_back(w.path.back());
+
+        //The following information is needed to identify start and end segments of restrictions
+        mExternalMemory.wayStartEndVector.push_back(_WayIDStartAndEndEdge(w.id, w.path[0], w.path[1], w.path[w.path.size()-2], w.path[w.path.size()-1]));
+    }
     return true;
 }

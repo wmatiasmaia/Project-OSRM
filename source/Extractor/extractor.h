@@ -18,40 +18,47 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 or see http://www.gnu.org/licenses/agpl.txt.
  */
 
-#ifndef EXTRACTORCALLBACKS_H_
-#define EXTRACTORCALLBACKS_H_
-
+#include <cstdlib>
+#include <iostream>
+#include <fstream>
 #include <string>
-#include <vector>
 
-#include <cfloat>
+extern "C" {
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
+}
+#include <luabind/luabind.hpp>
 
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/regex.hpp>
-#include <boost/regex.hpp>
+#include "../typedefs.h"
 
+#include "ExtractorCallbacks.h"
 #include "ExtractionContainers.h"
 #include "ExtractorStructs.h"
 
-class ExtractorCallbacks{
-private:
-    StringMap * stringMap;
-    ExtractionContainers * externalMemory;
+#include "../Util/BaseConfiguration.h"
 
-    ExtractorCallbacks();
+typedef BaseConfiguration ExtractorConfiguration;
+
+
+class Extractor {
 public:
-    explicit ExtractorCallbacks(ExtractionContainers * ext, StringMap * strMap);
+	Extractor(const char* fileName, const char* profileName);
+	void extract();
 
-    ~ExtractorCallbacks();
-
-    /** warning: caller needs to take care of synchronization! */
-    bool nodeFunction(_Node &n);
-
-    bool restrictionFunction(_RawRestrictionContainer &r);
-
-    /** warning: caller needs to take care of synchronization! */
-    bool wayFunction(_Way &w);
-
+    bool parseNode(_Node n);
+    bool parseRestriction(_RawRestrictionContainer r);
+    bool parseWay(_Way w);
+    
+    lua_State* getLuaState();
+    
+private:
+	void setupLua();
+	void checkRAM();
+	
+	std::string mFileName;
+	std::string mProfileName;
+	lua_State* mLuaState;
+    StringMap mStringMap;
+    ExtractionContainers mExternalMemory;
 };
-
-#endif /* EXTRACTORCALLBACKS_H_ */

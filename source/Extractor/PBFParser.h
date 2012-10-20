@@ -37,6 +37,8 @@ or see http://www.gnu.org/licenses/agpl.txt.
 #include "../DataStructures/HashTable.h"
 #include "../DataStructures/ConcurrentQueue.h"
 
+class Extractor;
+
 class PBFParser : public BaseParser<_Node, _RawRestrictionContainer, _Way> {
 
     typedef BaseParser<_Node, _RawRestrictionContainer, _Way> super;
@@ -73,11 +75,9 @@ class PBFParser : public BaseParser<_Node, _RawRestrictionContainer, _Way> {
 
 
 public:
-    PBFParser(const char * fileName);
+    PBFParser(Extractor* extractor, const char * fileName);
     ~PBFParser();
 
-    bool RegisterCallbacks(bool (*nodeCallbackPointer)(_Node), bool (*restrictionCallbackPointer)(_RawRestrictionContainer), bool (*wayCallbackPointer)(_Way) );
-    void RegisterLUAState(lua_State *ml);
     bool Init();
     void ReadData();
     void ParseData();
@@ -106,24 +106,16 @@ private:
         return x;
     }
     
-    
     // counting the number of read blocks and groups
     unsigned groupCount;
     unsigned blockCount;
 
-    // Function pointer for nodes
-    bool (*nodeCallback)(_Node);
-    bool (*wayCallback)(_Way);
-    bool (*restrictionCallback)(_RawRestrictionContainer);
     
     // the input stream to parse
     std::fstream input;
 
     // ThreadData Queue
     boost::shared_ptr<ConcurrentQueue < _ThreadData* > > threadDataQueue;
-
-    //LUA environment
-    lua_State *myLuaState;
 };
 
 #endif /* PBFPARSER_H_ */
