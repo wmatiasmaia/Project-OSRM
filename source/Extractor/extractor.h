@@ -18,25 +18,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 or see http://www.gnu.org/licenses/agpl.txt.
  */
 
-#include <cstdlib>
-#include <iostream>
-#include <fstream>
 #include <string>
-
-extern "C" {
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
-}
 #include <luabind/luabind.hpp>
-
 #include "../typedefs.h"
-
-#include "ExtractorCallbacks.h"
+#include "../Util/BaseConfiguration.h"
 #include "ExtractionContainers.h"
 #include "ExtractorStructs.h"
-
-#include "../Util/BaseConfiguration.h"
 
 typedef BaseConfiguration ExtractorConfiguration;
 
@@ -44,8 +31,8 @@ typedef BaseConfiguration ExtractorConfiguration;
 class Extractor {
 public:
 	Extractor(const char* fileName, const char* profileName);
+	
 	void extract();
-
     bool parseNode(_Node n);
     bool parseRestriction(_RawRestrictionContainer r);
     bool parseWay(_Way w);

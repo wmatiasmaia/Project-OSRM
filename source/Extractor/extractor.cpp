@@ -19,16 +19,21 @@ or see http://www.gnu.org/licenses/agpl.txt.
  */
 
 #include "extractor.h"
-
+#include "../Util/InputFileUtil.h"
+#include "../Util/MachineInfo.h"
 #include "LuaUtil.h"
 #include "PBFParser.h"
 #include "XMLParser.h"
-
-#include "../Util/InputFileUtil.h"
-#include "../Util/MachineInfo.h"
-
 #include "ExtractionHelperFunctions.h"
-
+#include <cfloat>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/regex.hpp>
+#include <boost/regex.hpp>
+extern "C" {
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
+}
 
 Extractor::Extractor(const char* fileName, const char* profileName) {
 	mFileName = fileName;
