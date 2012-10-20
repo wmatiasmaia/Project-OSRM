@@ -18,17 +18,27 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 or see http://www.gnu.org/licenses/agpl.txt.
  */
 
-#include "extractor.h"
+#include "fileExtensions.h"
 
-int main (int argc, char *argv[]) {
-	if(argc < 2) {
-        ERR("usage: \n" << argv[0] << " <file.osm/.osm.bz2/.osm.pbf> [<profile.lua>]");
-    }
-	
-	boost::filesystem::path file( argv[1] );
-	boost::filesystem::path profile( argc > 2 ? argv[2] : "profile.lua" );
-		
-	Extractor* extractor = new Extractor( file, profile );
-	extractor->extract();
-  	return 0;
+std::string FileExtensions::extension(const boost::filesystem::path& ph)
+{
+	std::string filename = ph.filename().c_str();
+	long n = filename.find('.');
+ 	if (n != std::string::npos)
+		return filename.substr(n);
+ 	else
+ 		return std::string();
+}
+
+std::string FileExtensions::basename(const boost::filesystem::path& ph)
+{
+  std::string string_type;
+  std::string filename = ph.filename().c_str();
+  long n = filename.find('.');
+  return filename.substr(0, n);
+}
+
+boost::filesystem::path FileExtensions::change_extension( const boost::filesystem::path& ph, const std::string& new_extension )
+{
+	return ph.parent_path() / (FileExtensions::basename(ph) + new_extension);
 }

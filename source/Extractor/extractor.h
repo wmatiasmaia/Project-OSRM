@@ -20,17 +20,20 @@ or see http://www.gnu.org/licenses/agpl.txt.
 
 #include <string>
 #include <luabind/luabind.hpp>
+#include <boost/filesystem/convenience.hpp>
 #include "../typedefs.h"
 #include "../Util/BaseConfiguration.h"
 #include "ExtractionContainers.h"
 #include "ExtractorStructs.h"
+#include "BaseParser.h"
 
 typedef BaseConfiguration ExtractorConfiguration;
 
 
 class Extractor {
 public:
-	Extractor(const char* fileName, const char* profileName);
+	Extractor(boost::filesystem::path& file, boost::filesystem::path& profile);
+	~Extractor();
 	
 	void extract();
     bool parseNode(_Node n);
@@ -43,9 +46,10 @@ private:
 	void setupLua();
 	void checkRAM();
 	
-	std::string mFileName;
-	std::string mProfileName;
+	boost::filesystem::path mFileName;
+	boost::filesystem::path mProfileName;
 	lua_State* mLuaState;
     StringMap mStringMap;
     ExtractionContainers mExternalMemory;
+    BaseParser<_Node, _RawRestrictionContainer, _Way>* mParser;
 };

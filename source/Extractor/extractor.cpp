@@ -25,6 +25,7 @@ or see http://www.gnu.org/licenses/agpl.txt.
 #include "PBFParser.h"
 #include "XMLParser.h"
 #include "ExtractionHelperFunctions.h"
+#include "../Util/fileExtensions.h"
 #include <cfloat>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/regex.hpp>
@@ -35,65 +36,43 @@ extern "C" {
 #include <lualib.h>
 }
 
-Extractor::Extractor(const char* fileName, const char* profileName) {
-	mFileName = fileName;
-	mProfileName = profileName;
+Extractor::Extractor(boost::filesystem::path& file, boost::filesystem::path& profile) : 
+mFileName(file), mProfileName(profile) {
+    mStringMap[""] = 0;
+
+	std::string extension = FileExtensions::extension(file);
+	if( extension == ".osm.pbf" || extension == ".osm.bz2" )
+        mParser = new PBFParser(this,file.c_str());
+	else
+        mParser = new XMLParser(this,file.c_str());
 };
+
+Extractor::~Extractor() {
+	delete mParser;
+    mStringMap.clear();
+}
 
 lua_State* Extractor::getLuaState() {
 	return mLuaState;
 }
 
 void Extractor::extract() {
-
     INFO("extracting data from input file " << mFileName);
-    bool isPBF(false);
-    std::string outputFileName(mFileName);
-    std::string restrictionsFileName(mFileName);
-    std::string::size_type pos = outputFileName.find(".osm.bz2");
-    if(pos==std::string::npos) {
-        pos = outputFileName.find(".osm.pbf");
-        if(pos!=std::string::npos) {
-            isPBF = true;
-        }
-    }
-    if(pos!=string::npos) {
-        outputFileName.replace(pos, 8, ".osrm");
-        restrictionsFileName.replace(pos, 8, ".osrm.restrictions");
-    } else {
-        pos=outputFileName.find(".osm");
-        if(pos!=string::npos) {
-            outputFileName.replace(pos, 5, ".osrm");
-            restrictionsFileName.replace(pos, 5, ".osrm.restrictions");
-        } else {
-            outputFileName.append(".osrm");
-            restrictionsFileName.append(".osrm.restrictions");
-        }
-    }
 
-	setupLua();
 	checkRAM();
+	setupLua();
 
-    mStringMap[""] = 0;
-    BaseParser<_Node, _RawRestrictionContainer, _Way> * parser;
-    if(isPBF) {
-        parser = new PBFParser(this,mFileName.c_str());
-    } else {
-        parser = new XMLParser(this,mFileName.c_str());
-    }
-
-    if(!parser->Init())
-        INFO("Parser not initialized!");
-    parser->Parse();
+	mParser->Init();
+    mParser->Parse();
 
     unsigned amountOfRAM = 1;
-    mExternalMemory.PrepareData(outputFileName, restrictionsFileName, amountOfRAM);
+	boost::filesystem::path	outFile = FileExtensions::change_extension(mFileName, ".osrm");
+	boost::filesystem::path	outRestrictions = FileExtensions::change_extension(mFileName, ".osrm.restrictions");
+    
+	mExternalMemory.PrepareData(outFile.c_str(), outRestrictions.c_str(), amountOfRAM);
 
-    mStringMap.clear();
-    delete parser;
-    INFO("[extractor] finished.");
-    std::cout << "\nRun:\n"
-                   "./osrm-prepare " << outputFileName << " " << restrictionsFileName << std::endl;
+	INFO("[extractor] finished.");
+    std::cout << "\nTo preprocess the extracted data, run this command:\n./osrm-prepare " << outFile.c_str() << " " << outRestrictions.c_str() << std::endl;
 }
 
 void Extractor::checkRAM() {	

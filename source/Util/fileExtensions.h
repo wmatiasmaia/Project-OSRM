@@ -18,17 +18,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 or see http://www.gnu.org/licenses/agpl.txt.
  */
 
-#include "extractor.h"
+#include <boost/filesystem/convenience.hpp>
 
-int main (int argc, char *argv[]) {
-	if(argc < 2) {
-        ERR("usage: \n" << argv[0] << " <file.osm/.osm.bz2/.osm.pbf> [<profile.lua>]");
-    }
-	
-	boost::filesystem::path file( argv[1] );
-	boost::filesystem::path profile( argc > 2 ? argv[2] : "profile.lua" );
-		
-	Extractor* extractor = new Extractor( file, profile );
-	extractor->extract();
-  	return 0;
-}
+class FileExtensions {
+public:
+    //normal boost methods looks for rightmost dot, when deciding extension: london.osm.pbf => .pbf
+    //these versions look for the leftmost dot: london.osm.pbf  => .osm.pbf
+    
+    static std::string extension(const boost::filesystem::path& ph);
+    static std::string basename(const boost::filesystem::path& ph);
+    static boost::filesystem::path change_extension(const boost::filesystem::path& ph, const std::string& new_extension);
+};
