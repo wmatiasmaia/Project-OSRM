@@ -25,7 +25,10 @@ int main (int argc, char *argv[]) {
         ERR("usage: \n" << argv[0] << " <file.osm/.osm.bz2/.osm.pbf> [<profile.lua>]");
     }
 	
-	Extractor* extractor = new Extractor( argv[1], (argc > 2 ? argv[2] : "profile.lua") );
+	const char* file = argv[1];
+	const char* profile = argc > 2 ? argv[2] : "profile.lua";
+		
+	Extractor* extractor = new Extractor( file, profile );
 	extractor->extract();
   	return 0;
 }
