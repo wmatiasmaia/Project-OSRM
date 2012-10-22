@@ -42,9 +42,9 @@ mFileName(file), mProfileName(profile) {
 
 	std::string extension = FileExtensions::extension(file);
 	if( extension == ".osm.pbf" || extension == ".osm.bz2" )
-        mParser = new PBFParser(this,file.c_str());
+        mParser = new PBFParser(*this,file.c_str());
 	else
-        mParser = new XMLParser(this,file.c_str());
+        mParser = new XMLParser(*this,file.c_str());
 };
 
 Extractor::~Extractor() {

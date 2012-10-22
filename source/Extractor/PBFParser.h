@@ -75,7 +75,7 @@ class PBFParser : public BaseParser<_Node, _RawRestrictionContainer, _Way> {
 
 
 public:
-    PBFParser(Extractor* extractor, const char * fileName);
+    PBFParser(Extractor& extractor, const char * fileName);
     ~PBFParser();
 
     bool Init();

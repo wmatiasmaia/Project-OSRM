@@ -28,7 +28,7 @@ class Extractor;
 template<typename NodeT, typename RestrictionT, typename WayT>
 class BaseParser {
 public:
-    BaseParser(Extractor* extractor) : mExtractor(extractor) {};
+    BaseParser(Extractor& extractor) : mExtractor(extractor) {};
     virtual ~BaseParser() {};
     virtual bool Init() = 0;
     virtual bool Parse() = 0;
@@ -41,7 +41,7 @@ public:
     }
 
 protected:
-    Extractor*  mExtractor;
+    Extractor&  mExtractor;
 };
 
 #endif /* BASEPARSER_H_ */

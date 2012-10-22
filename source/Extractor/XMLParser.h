@@ -32,7 +32,7 @@ or see http://www.gnu.org/licenses/agpl.txt.
 
 class XMLParser : public BaseParser<_Node, _RawRestrictionContainer, _Way> {
 public:
-    XMLParser(Extractor* extractor, const char * filename) : BaseParser(extractor), nodeCallback(NULL), wayCallback(NULL), restrictionCallback(NULL), myLuaState(NULL){
+    XMLParser(Extractor& extractor, const char * filename) : BaseParser(extractor), nodeCallback(NULL), wayCallback(NULL), restrictionCallback(NULL), myLuaState(NULL){
         WARN("Parsing plain .osm/.osm.bz2 is deprecated. Switch to .pbf");
         inputReader = inputReaderFactory(filename);
     }

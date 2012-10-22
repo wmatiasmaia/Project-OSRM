@@ -29,7 +29,7 @@ extern "C" {
 #include <luabind/luabind.hpp>
 
 
-PBFParser::PBFParser(Extractor* extractor, const char * fileName) :
+PBFParser::PBFParser(Extractor& extractor, const char * fileName) :
 BaseParser(extractor) {
     GOOGLE_PROTOBUF_VERIFY_VERSION;
     //TODO: What is the bottleneck here? Filling the queue or reading the stuff from disk?
@@ -214,11 +214,11 @@ void PBFParser::parseDenseNode(_ThreadData * threadData) {
         /** Pass the unpacked node to the LUA call back **/
         try {
             luabind::call_function<int>(
-                    mExtractor->getLuaState(),
+                    mExtractor.getLuaState(),
                     "node_function",
                     boost::ref(n)
             );
-            if(!(mExtractor->parseNode)(n))
+            if(!(mExtractor.parseNode)(n))
                 std::cerr << "[PBFParser] dense node not parsed" << std::endl;
         } catch (const luabind::error &er) {
             cerr << er.what() << endl;
@@ -306,7 +306,7 @@ void PBFParser::parseRelation(_ThreadData * threadData) {
             //                    cout << "node " << currentRestriction.viaNode;
             //                    cout << " to " << currentRestriction.to << endl;
             //                }
-            if(!mExtractor->parseRestriction(currentRestrictionContainer))
+            if(!mExtractor.parseRestriction(currentRestrictionContainer))
                 std::cerr << "[PBFParser] relation not parsed" << std::endl;
         }
     }
@@ -333,12 +333,12 @@ void PBFParser::parseWay(_ThreadData * threadData) {
             /** Pass the unpacked way to the LUA call back **/
             try {
                 luabind::call_function<int>(
-                    mExtractor->getLuaState(),
+                    mExtractor.getLuaState(),
                     "way_function",
                     boost::ref(w),
                     w.path.size()
                 );
-                if(!mExtractor->parseWay(w)) {
+                if(!mExtractor.parseWay(w)) {
                     std::cerr << "[PBFParser] way not parsed" << std::endl;
                 }
             } catch (const luabind::error &er) {
