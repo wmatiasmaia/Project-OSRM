@@ -28,7 +28,7 @@ int main (int argc, char *argv[]) {
 	boost::filesystem::path file( argv[1] );
 	boost::filesystem::path profile( argc > 2 ? argv[2] : "profile.lua" );
 		
-	Extractor* extractor = new Extractor( file, profile );
-	extractor->extract();
+	Extractor extractor( file, profile );
+	extractor.extract();
   	return 0;
 }
