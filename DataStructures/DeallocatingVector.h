@@ -49,6 +49,7 @@ protected:
         ElementT * mData;
         size_t mIndex;
         std::vector<ElementT *> & mBucketList;
+
         inline void setPointerForIndex() {
             if(bucketSizeC*mBucketList.size() <= mIndex) {
                 mData = DEALLOCATION_VECTOR_NULL_PTR;
@@ -102,7 +103,9 @@ public:
 
     template<typename T2>
     DeallocatingVectorIterator(const DeallocatingVectorIterator<T2> & r) : mState(r.mState) {}
+
     DeallocatingVectorIterator(size_t idx, std::vector<ElementT *> & input_list) : mState(idx, input_list) {}
+    //DeallocatingVectorIterator(size_t idx, const std::vector<ElementT *> & input_list) : mState(idx, input_list) {}
     DeallocatingVectorIterator(const DeallocatingVectorIteratorState & r) : mState(r) {}
 
     template<typename T2>
@@ -123,13 +126,13 @@ public:
 
     inline DeallocatingVectorIterator operator++(int) { //postfix
         DeallocatingVectorIteratorState _myState(mState);
-        _myState.mIndex++; _myState.setPointerForIndex();
+        mState.mIndex++; mState.setPointerForIndex();
         return DeallocatingVectorIterator(_myState);
     }
     inline DeallocatingVectorIterator operator --(int) { //postfix
         if(DeallocateC) assert(false);
         DeallocatingVectorIteratorState _myState(mState);
-        _myState.mIndex--; _myState.setPointerForIndex();
+        mState.mIndex--; mState.setPointerForIndex();
         return DeallocatingVectorIterator(_myState);
     }
 
@@ -189,6 +192,7 @@ private:
     std::vector<ElementT *> mBucketList;
 
 public:
+    typedef ElementT value_type;
     typedef DeallocatingVectorIterator<ElementT, bucketSizeC, false> iterator;
     typedef DeallocatingVectorIterator<ElementT, bucketSizeC, false> const_iterator;
 
@@ -213,11 +217,13 @@ public:
         //Delete[]'ing ptr's to all Buckets
         for(unsigned i = 0; i < mBucketList.size(); ++i) {
             if(DEALLOCATION_VECTOR_NULL_PTR != mBucketList[i]) {
-                delete[] (mBucketList[i]);
+                delete[] mBucketList[i];
+                mBucketList[i] = DEALLOCATION_VECTOR_NULL_PTR;
             }
         }
         //Removing all ptrs from vector
         std::vector<ElementT *>().swap(mBucketList);
+        mCurrentSize = 0;
     }
 
     inline void push_back(const ElementT & element) {
@@ -231,6 +237,28 @@ public:
         ++mCurrentSize;
     }
 
+    inline void reserve(const size_t) const {
+        //don't do anything
+    }
+
+    inline void resize(const size_t new_size) {
+        if(new_size > mCurrentSize) {
+            while(capacity() < new_size) {
+                mBucketList.push_back(new ElementT[bucketSizeC]);
+            }
+            mCurrentSize = new_size;
+        }
+        if(new_size < mCurrentSize) {
+            size_t number_of_necessary_buckets = 1+(new_size / bucketSizeC);
+
+            for(unsigned i = number_of_necessary_buckets; i < mBucketList.size(); ++i) {
+                delete[] mBucketList[i];
+            }
+            mBucketList.resize(number_of_necessary_buckets);
+            mCurrentSize = new_size;
+        }
+    }
+
     inline size_t size() const {
         return mCurrentSize;
     }
@@ -240,7 +268,7 @@ public:
     }
 
     inline iterator begin() {
-        return iterator((size_t)0, mBucketList);
+        return iterator(static_cast<size_t>(0), mBucketList);
     }
 
     inline iterator end() {
@@ -248,7 +276,7 @@ public:
     }
 
     inline deallocation_iterator dbegin() {
-        return deallocation_iterator((size_t)0, mBucketList);
+        return deallocation_iterator(static_cast<size_t>(0), mBucketList);
     }
 
     inline deallocation_iterator dend() {
@@ -256,7 +284,7 @@ public:
     }
 
     inline const_iterator begin() const {
-        return const_iterator((size_t)0, mBucketList);
+        return const_iterator(static_cast<size_t>(0), mBucketList);
     }
 
     inline const_iterator end() const {
@@ -275,7 +303,5 @@ public:
         return (mBucketList[_bucket][_index]);
     }
 };
-
-
 
 #endif /* DEALLOCATINGVECTOR_H_ */

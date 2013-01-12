@@ -28,10 +28,12 @@ or see http://www.gnu.org/licenses/agpl.txt.
 #include <boost/lexical_cast.hpp>
 #include <boost/noncopyable.hpp>
 
+#include "APIGrammar.h"
 #include "BasicDatastructures.h"
 #include "../DataStructures/HashTable.h"
 #include "../Plugins/BasePlugin.h"
 #include "../Plugins/RouteParameters.h"
+#include "../Util/StringUtil.h"
 #include "../typedefs.h"
 
 namespace http {
@@ -51,57 +53,46 @@ public:
     void handle_request(const Request& req, Reply& rep){
         //parse command
         std::string request(req.uri);
-        time_t ltime;
-        struct tm *Tm;
 
-        ltime=time(NULL);
-        Tm=localtime(&ltime);
+        { //This block logs the current request to std out. should be moved to a logging component
+            time_t ltime;
+            struct tm *Tm;
 
-        INFO((Tm->tm_mday < 10 ? "0" : "" )  << Tm->tm_mday << "-" << (Tm->tm_mon < 10 ? "0" : "" )  << Tm->tm_mon << "-" << 1900+Tm->tm_year << " " << (Tm->tm_hour < 10 ? "0" : "" ) << Tm->tm_hour << ":" << (Tm->tm_min < 10 ? "0" : "" ) << Tm->tm_min << ":" << (Tm->tm_sec < 10 ? "0" : "" ) << Tm->tm_sec << " " <<
-                req.endpoint.to_string() << " " << req.referrer << ( 0 == req.referrer.length() ? "- " :" ") << req.agent << ( 0 == req.agent.length() ? "- " :" ") << request );
-        std::string command;
-        std::size_t firstAmpPosition = request.find_first_of("?");
-        command = request.substr(1,firstAmpPosition-1);
-        //DEBUG("[debug] looking for handler for command: " << command);
+            ltime=time(NULL);
+            Tm=localtime(&ltime);
+
+            INFO((Tm->tm_mday < 10 ? "0" : "" )  << Tm->tm_mday << "-" << (Tm->tm_mon+1 < 10 ? "0" : "" )  << (Tm->tm_mon+1) << "-" << 1900+Tm->tm_year << " " << (Tm->tm_hour < 10 ? "0" : "" ) << Tm->tm_hour << ":" << (Tm->tm_min < 10 ? "0" : "" ) << Tm->tm_min << ":" << (Tm->tm_sec < 10 ? "0" : "" ) << Tm->tm_sec << " " <<
+                    req.endpoint.to_string() << " " << req.referrer << ( 0 == req.referrer.length() ? "- " :" ") << req.agent << ( 0 == req.agent.length() ? "- " :" ") << req.uri );
+        }
         try {
-            if(pluginMap.Holds(command)) {
+            RouteParameters routeParameters;
+            APIGrammar<std::string::iterator, RouteParameters> apiParser(&routeParameters);
 
-                RouteParameters routeParameters;
-                std::stringstream ss(( firstAmpPosition == std::string::npos ? "" : request.substr(firstAmpPosition+1) ));
-                std::string item;
-                while(std::getline(ss, item, '&')) {
-                    size_t found = item.find('=');
-                    if(found == std::string::npos) {
-                        routeParameters.parameters.push_back(item);
-                    } else {
-                        std::string p = item.substr(0, found);
-                        std::transform(p.begin(), p.end(), p.begin(), (int(*)(int)) std::tolower);
-                        std::string o = item.substr(found+1);
-                        if("jsonp" != p && "hint" != p)
-                            std::transform(o.begin(), o.end(), o.begin(), (int(*)(int)) std::tolower);
-                        if("loc" == p) {
-                            if(25 >= routeParameters.viaPoints.size()) {
-                                routeParameters.viaPoints.push_back(o);
-                            }
-                        } else if("hint" == p) {
-                            routeParameters.hints.resize(routeParameters.viaPoints.size());
-                            if(routeParameters.viaPoints.size())
-                                routeParameters.hints.back() = o;
-                        } else {
-                            routeParameters.options.Set(p, o);
-                        }
-                    }
-                }
-                //				std::cout << "[debug] found handler for '" << command << "' at version: " << pluginMap.Find(command)->GetVersionString() << std::endl;
-                //				std::cout << "[debug] remaining parameters: " << parameters.size() << std::endl;
-                rep.status = Reply::ok;
-                _pluginVector[pluginMap.Find(command)]->HandleRequest(routeParameters, rep );
-
-                //				std::cout << rep.content << std::endl;
+            std::string::iterator it = request.begin();
+            bool result = boost::spirit::qi::parse(it, request.end(), apiParser);    // returns true if successful
+            if (!result || (it != request.end()) ) {
+                rep = http::Reply::stockReply(http::Reply::badRequest);
+                int position = std::distance(request.begin(), it);
+                std::string tmp_position_string;
+                intToString(position, tmp_position_string);
+                rep.content += "Input seems to be malformed close to position ";
+                rep.content += "<br><pre>";
+                rep.content += request;
+                rep.content += tmp_position_string;
+                rep.content += "<br>";
+                for(unsigned i = 0, end = std::distance(request.begin(), it); i < end; ++i)
+                    rep.content += "&nbsp;";
+                rep.content += "^<br></pre>";
             } else {
-                rep = Reply::stockReply(Reply::badRequest);
+                //Finished parsing, lets call the right plugin to handle the request
+                if(pluginMap.Holds(routeParameters.service)) {
+                    rep.status = Reply::ok;
+                    _pluginVector[pluginMap.Find(routeParameters.service)]->HandleRequest(routeParameters, rep );
+                } else {
+                    rep = Reply::stockReply(Reply::badRequest);
+                }
+                return;
             }
-            return;
         } catch(std::exception& e) {
             rep = Reply::stockReply(Reply::internalServerError);
             std::cerr << "[server error] code: " << e.what() << ", uri: " << req.uri << std::endl;
@@ -113,7 +104,7 @@ public:
         std::cout << "[handler] registering plugin " << plugin->GetDescriptor() << std::endl;
         pluginMap.Add(plugin->GetDescriptor(), _pluginCount);
         _pluginVector.push_back(plugin);
-        _pluginCount++;
+        ++_pluginCount;
     }
 
 private:

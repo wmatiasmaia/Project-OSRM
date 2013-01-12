@@ -26,7 +26,7 @@
 #include "../typedefs.h"
 #include "../Algorithms/DouglasPeucker.h"
 #include "../Algorithms/PolylineCompressor.h"
-#include "../DataStructures/ExtractorStructs.h"
+#include "../DataStructures/Coordinate.h"
 #include "../DataStructures/QueryEdge.h"
 #include "../DataStructures/SearchEngine.h"
 #include "../DataStructures/SegmentInformation.h"
@@ -51,19 +51,15 @@ public:
         unsigned startName;
         unsigned destName;
         _RouteSummary() : lengthString("0"), durationString("0"), startName(0), destName(0) {}
-        void BuildDurationAndLengthStrings(unsigned distance, unsigned time) {
+        void BuildDurationAndLengthStrings(const double distance, const unsigned time) {
             //compute distance/duration for route summary
-            std::ostringstream s;
-            s << 10*(round(distance/10.));
-            lengthString = s.str();
+            intToString(round(distance), lengthString);
             int travelTime = time/10 + 1;
-            s.str("");
-            s << travelTime;
-            durationString = s.str();
+            intToString(travelTime, durationString);
         }
     } summary;
 
-    unsigned entireLength;
+    double entireLength;
 
     //I know, declaring this public is considered bad. I'm lazy
     std::vector <SegmentInformation> pathDescription;
@@ -73,11 +69,11 @@ public:
     void AppendEncodedPolylineString(std::string &output);
     void AppendUnencodedPolylineString(std::string &output);
     void AppendSegment(const _Coordinate & coordinate, const _PathData & data);
-    void BuildRouteSummary(const unsigned distance, const unsigned time);
+    void BuildRouteSummary(const double distance, const unsigned time);
     void SetStartSegment(const PhantomNode & startPhantom);
     void SetEndSegment(const PhantomNode & startPhantom);
     void AppendEncodedPolylineString(std::string & output, bool isEncoded);
-    void Run(const SearchEngineT &sEngine, const unsigned zoomLevel, const unsigned duration);
+    void Run(const SearchEngineT &sEngine, const unsigned zoomLevel);
 };
 
 #endif /* DESCRIPTIONFACTORY_H_ */

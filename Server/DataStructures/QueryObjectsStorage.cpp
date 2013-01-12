@@ -22,9 +22,10 @@ or see http://www.gnu.org/licenses/agpl.txt.
 #include "QueryObjectsStorage.h"
 #include "../../Util/GraphLoader.h"
 
-QueryObjectsStorage::QueryObjectsStorage(std::string hsgrPath, std::string ramIndexPath, std::string fileIndexPath, std::string nodesPath, std::string edgesPath, std::string namesPath, std::string timestampPath, std::string psd) {
+QueryObjectsStorage::QueryObjectsStorage(std::string hsgrPath, std::string ramIndexPath, std::string fileIndexPath, std::string nodesPath, std::string edgesPath, std::string namesPath, std::string timestampPath) {
 	INFO("loading graph data");
 	std::ifstream hsgrInStream(hsgrPath.c_str(), std::ios::binary);
+    if(!hsgrInStream) { ERR(hsgrPath <<  " not found"); }
 	//Deserialize road network graph
 	std::vector< QueryGraph::_StrNode> nodeList;
 	std::vector< QueryGraph::_StrEdge> edgeList;
@@ -36,26 +37,31 @@ QueryObjectsStorage::QueryObjectsStorage(std::string hsgrPath, std::string ramIn
 	assert(0 == edgeList.size());
 
 	if(timestampPath.length()) {
-	    INFO("Loading Timestamp")
-	        std::ifstream timestampInStream(timestampPath.c_str());
+	    INFO("Loading Timestamp");
+	    std::ifstream timestampInStream(timestampPath.c_str());
+	    if(!timestampInStream) { ERR(timestampPath <<  " not found"); }
+
 	    getline(timestampInStream, timestamp);
 	    timestampInStream.close();
 	}
 	if(!timestamp.length())
 	    timestamp = "n/a";
-	if(15 < timestamp.length())
-	    timestamp.resize(15);
+	if(25 < timestamp.length())
+	    timestamp.resize(25);
 
     INFO("Loading auxiliary information");
     //Init nearest neighbor data structure
 	std::ifstream nodesInStream(nodesPath.c_str(), std::ios::binary);
+	if(!nodesInStream) { ERR(nodesPath <<  " not found"); }
     std::ifstream edgesInStream(edgesPath.c_str(), std::ios::binary);
+    if(!edgesInStream) { ERR(edgesPath <<  " not found"); }
 	nodeHelpDesk = new NodeInformationHelpDesk(ramIndexPath.c_str(), fileIndexPath.c_str(), n, checkSum);
 	nodeHelpDesk->initNNGrid(nodesInStream, edgesInStream);
 
 	//deserialize street name list
 	INFO("Loading names index");
 	std::ifstream namesInStream(namesPath.c_str(), std::ios::binary);
+    if(!namesInStream) { ERR(namesPath <<  " not found"); }
 	unsigned size(0);
 	namesInStream.read((char *)&size, sizeof(unsigned));
 	//        names = new std::vector<std::string>();

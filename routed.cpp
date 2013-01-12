@@ -37,7 +37,7 @@ or see http://www.gnu.org/licenses/agpl.txt.
 #include "Plugins/ViaRoutePlugin.h"
 
 #include "Util/InputFileUtil.h"
-#include "Util/OpenMPReplacement.h"
+#include "Util/OpenMPWrapper.h"
 
 #ifndef _WIN32
 #include "Util/LinuxStackTrace.h"
@@ -64,7 +64,7 @@ BOOL WINAPI console_ctrl_handler(DWORD ctrl_type)
 }
 #endif
 
-int main (int argc, char *argv[]) {
+int main (int argc, char * argv[0]) {
 #ifdef __linux__
     if(!mlockall(MCL_CURRENT | MCL_FUTURE))
         WARN("Process " << argv[0] << "could not be locked to RAM");
@@ -82,7 +82,7 @@ int main (int argc, char *argv[]) {
     //}
 
     try {
-        std::cout << "[server] starting up engines, saved at " << __TIMESTAMP__ << std::endl;
+        std::cout << std::endl << "[server] starting up engines, saved at " << __TIMESTAMP__ << std::endl;
 
 #ifndef _WIN32
         int sig = 0;
@@ -92,7 +92,7 @@ int main (int argc, char *argv[]) {
         pthread_sigmask(SIG_BLOCK, &new_mask, &old_mask);
 #endif
 
-        ServerConfiguration serverConfig("server.ini");
+        ServerConfiguration serverConfig((argc > 1 ? argv[1] : "server.ini"));
         Server * s = ServerFactory::CreateServer(serverConfig);
         RequestHandler & h = s->GetRequestHandlerPtr();
 
@@ -135,11 +135,14 @@ int main (int argc, char *argv[]) {
         s->Run();
 #endif
 
-        std::cout << std::endl << "[server] shutting down" << std::endl;
+        std::cout << "[server] initiating shutdown" << std::endl;
         s->Stop();
+        std::cout << "[server] stopping threads" << std::endl;
         t.join();
+        std::cout << "[server] freeing objects" << std::endl;
         delete s;
         delete objects;
+        std::cout << "[server] shutdown completed" << std::endl;
     } catch (std::exception& e) {
         std::cerr << "[fatal error] exception: " << e.what() << std::endl;
     }

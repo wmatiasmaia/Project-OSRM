@@ -60,7 +60,11 @@ void DescriptionFactory::SetEndSegment(const PhantomNode & _targetPhantom) {
 }
 
 void DescriptionFactory::AppendSegment(const _Coordinate & coordinate, const _PathData & data ) {
-    pathDescription.push_back(SegmentInformation(coordinate, data.nameID, 0, data.durationOfSegment, data.turnInstruction) );
+    if(1 == pathDescription.size() && pathDescription.back().location == coordinate) {
+        pathDescription.back().nameID = data.nameID;
+    } else {
+        pathDescription.push_back(SegmentInformation(coordinate, data.nameID, 0, data.durationOfSegment, data.turnInstruction) );
+    }
 }
 
 void DescriptionFactory::AppendEncodedPolylineString(std::string & output, bool isEncoded) {
@@ -78,7 +82,7 @@ void DescriptionFactory::AppendUnencodedPolylineString(std::string &output) {
     pc.printUnencodedString(pathDescription, output);
 }
 
-void DescriptionFactory::Run(const SearchEngineT &sEngine, const unsigned zoomLevel, const unsigned duration) {
+void DescriptionFactory::Run(const SearchEngineT &sEngine, const unsigned zoomLevel) {
 
     if(0 == pathDescription.size())
         return;
@@ -87,10 +91,10 @@ void DescriptionFactory::Run(const SearchEngineT &sEngine, const unsigned zoomLe
     /** starts at index 1 */
     pathDescription[0].length = 0;
     for(unsigned i = 1; i < pathDescription.size(); ++i) {
-        pathDescription[i].length = ApproximateDistance(pathDescription[i-1].location, pathDescription[i].location);
+        pathDescription[i].length = ApproximateDistanceByEuclid(pathDescription[i-1].location, pathDescription[i].location);
     }
 
-    unsigned lengthOfSegment = 0;
+    double lengthOfSegment = 0;
     unsigned durationOfSegment = 0;
     unsigned indexOfSegmentBegin = 0;
 
@@ -107,32 +111,37 @@ void DescriptionFactory::Run(const SearchEngineT &sEngine, const unsigned zoomLe
     becomes:
     10. Turn left on B 36 for 35 km
     */
-    unsigned lastTurn = 0;
-    for(unsigned i = 1; i < pathDescription.size(); ++i) {
-        string1 = sEngine.GetEscapedNameForNameID(pathDescription[i].nameID);
-        if(TurnInstructionsClass::GoStraight == pathDescription[i].turnInstruction) {
-            if(std::string::npos != string0.find(string1+";") ||
-                    std::string::npos != string0.find(";"+string1) ||
-                    std::string::npos != string0.find(string1+" ;") ||
-                    std::string::npos != string0.find("; "+string1)){
+//TODO: rework to check only end and start of string.
+//		stl string is way to expensive
+
+//    unsigned lastTurn = 0;
+//    for(unsigned i = 1; i < pathDescription.size(); ++i) {
+//        string1 = sEngine.GetEscapedNameForNameID(pathDescription[i].nameID);
+//        if(TurnInstructionsClass::GoStraight == pathDescription[i].turnInstruction) {
+//            if(std::string::npos != string0.find(string1+";")
+//            		|| std::string::npos != string0.find(";"+string1)
+//            		|| std::string::npos != string0.find(string1+" ;")
+//                    || std::string::npos != string0.find("; "+string1)
+//                    ){
 //                INFO("->next correct: " << string0 << " contains " << string1);
-                for(; lastTurn != i; ++lastTurn)
-                    pathDescription[lastTurn].nameID = pathDescription[i].nameID;
-                pathDescription[i].turnInstruction = TurnInstructionsClass::NoTurn;
-            } else if(std::string::npos != string1.find(string0+";") ||
-                    std::string::npos != string1.find(";"+string0) ||
-                    std::string::npos != string1.find(string0+" ;")||
-                    std::string::npos != string1.find("; "+string0)) {
+//                for(; lastTurn != i; ++lastTurn)
+//                    pathDescription[lastTurn].nameID = pathDescription[i].nameID;
+//                pathDescription[i].turnInstruction = TurnInstructionsClass::NoTurn;
+//            } else if(std::string::npos != string1.find(string0+";")
+//            		|| std::string::npos != string1.find(";"+string0)
+//                    || std::string::npos != string1.find(string0+" ;")
+//                    || std::string::npos != string1.find("; "+string0)
+//                    ){
 //                INFO("->prev correct: " << string1 << " contains " << string0);
-                pathDescription[i].nameID = pathDescription[i-1].nameID;
-                pathDescription[i].turnInstruction = TurnInstructionsClass::NoTurn;
-            }
-        }
-        if (TurnInstructionsClass::NoTurn != pathDescription[i].turnInstruction) {
-            lastTurn = i;
-        }
-        string0 = string1;
-    }
+//                pathDescription[i].nameID = pathDescription[i-1].nameID;
+//                pathDescription[i].turnInstruction = TurnInstructionsClass::NoTurn;
+//            }
+//        }
+//        if (TurnInstructionsClass::NoTurn != pathDescription[i].turnInstruction) {
+//            lastTurn = i;
+//        }
+//        string0 = string1;
+//    }
 
 
     for(unsigned i = 1; i < pathDescription.size(); ++i) {
@@ -154,7 +163,7 @@ void DescriptionFactory::Run(const SearchEngineT &sEngine, const unsigned zoomLe
     //    INFO("#segs: " << pathDescription.size());
 
     //Post-processing to remove empty or nearly empty path segments
-    if(0 == pathDescription.back().length) {
+    if(FLT_EPSILON > pathDescription.back().length) {
         //        INFO("#segs: " << pathDescription.size() << ", last ratio: " << targetPhantom.ratio << ", length: " << pathDescription.back().length);
         if(pathDescription.size() > 2){
             pathDescription.pop_back();
@@ -166,7 +175,8 @@ void DescriptionFactory::Run(const SearchEngineT &sEngine, const unsigned zoomLe
     } else {
         pathDescription[indexOfSegmentBegin].duration *= (1.-targetPhantom.ratio);
     }
-    if(0 == pathDescription[0].length) {
+    if(FLT_EPSILON > pathDescription[0].length) {
+        //TODO: this is never called actually?
         if(pathDescription.size() > 2) {
             pathDescription.erase(pathDescription.begin());
             pathDescription[0].turnInstruction = TurnInstructions.HeadOn;
@@ -193,7 +203,7 @@ void DescriptionFactory::Run(const SearchEngineT &sEngine, const unsigned zoomLe
     return;
 }
 
-void DescriptionFactory::BuildRouteSummary(const unsigned distance, const unsigned time) {
+void DescriptionFactory::BuildRouteSummary(const double distance, const unsigned time) {
     summary.startName = startPhantom.nodeBasedEdgeNameID;
     summary.destName = targetPhantom.nodeBasedEdgeNameID;
     summary.BuildDurationAndLengthStrings(distance, time);

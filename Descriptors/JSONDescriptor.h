@@ -23,6 +23,9 @@ or see http://www.gnu.org/licenses/agpl.txt.
 
 #include <algorithm>
 
+#include <boost/lambda/lambda.hpp>
+#include <boost/bind.hpp>
+
 #include "BaseDescriptor.h"
 #include "DescriptionFactory.h"
 #include "../Algorithms/ObjectToBase64.h"
@@ -45,12 +48,30 @@ private:
         int leaveAtExit;
     } roundAbout;
 
+    struct Segment {
+        Segment() : nameID(-1), length(-1), position(-1) {}
+        Segment(int n, int l, int p) : nameID(n), length(l), position(p) {}
+        int nameID;
+        int length;
+        int position;
+    };
+    std::vector<Segment> shortestSegments, alternativeSegments;
+
+    struct RouteNames {
+        std::string shortestPathName1;
+        std::string shortestPathName2;
+        std::string alternativePathName1;
+        std::string alternativePathName2;
+    };
+
 public:
     JSONDescriptor() : numberOfEnteredRestrictedAreas(0) {}
     void SetConfig(const _DescriptorConfig & c) { config = c; }
 
     void Run(http::Reply & reply, const RawRouteData &rawRoute, PhantomNodes &phantomNodes, SearchEngineT &sEngine) {
+
         WriteHeaderToOutput(reply.content);
+
         if(rawRoute.lengthOfShortestPath != INT_MAX) {
             descriptionFactory.SetStartSegment(phantomNodes.startPhantom);
             reply.content += "0,"
@@ -68,7 +89,7 @@ public:
                     "\"status_message\": \"Cannot find route between points\",";
         }
 
-        descriptionFactory.Run(sEngine, config.z, rawRoute.lengthOfShortestPath);
+        descriptionFactory.Run(sEngine, config.z);
         reply.content += "\"route_geometry\": ";
         if(config.geometry) {
             descriptionFactory.AppendEncodedPolylineString(reply.content, config.encodeGeometry);
@@ -80,10 +101,10 @@ public:
                 "\"route_instructions\": [";
         numberOfEnteredRestrictedAreas = 0;
         if(config.instructions) {
-            BuildTextualDescription(descriptionFactory, reply, rawRoute.lengthOfShortestPath, sEngine);
+            BuildTextualDescription(descriptionFactory, reply, rawRoute.lengthOfShortestPath, sEngine, shortestSegments);
         } else {
             BOOST_FOREACH(const SegmentInformation & segment, descriptionFactory.pathDescription) {
-                short currentInstruction = segment.turnInstruction & TurnInstructions.InverseAccessRestrictionFlag;
+                TurnInstruction currentInstruction = segment.turnInstruction & TurnInstructions.InverseAccessRestrictionFlag;
                 numberOfEnteredRestrictedAreas += (currentInstruction != segment.turnInstruction);
             }
         }
@@ -118,7 +139,7 @@ public:
             }
             alternateDescriptionFactory.SetEndSegment(phantomNodes.targetPhantom);
         }
-        alternateDescriptionFactory.Run(sEngine, config.z, rawRoute.lengthOfAlternativePath);
+        alternateDescriptionFactory.Run(sEngine, config.z);
 
         //give an array of alternative routes
         reply.content += "\"alternative_geometries\": [";
@@ -133,10 +154,10 @@ public:
             reply.content += "[";
             //Generate instructions for each alternative
             if(config.instructions) {
-                BuildTextualDescription(alternateDescriptionFactory, reply, rawRoute.lengthOfAlternativePath, sEngine);
+                BuildTextualDescription(alternateDescriptionFactory, reply, rawRoute.lengthOfAlternativePath, sEngine, alternativeSegments);
             } else {
                 BOOST_FOREACH(const SegmentInformation & segment, alternateDescriptionFactory.pathDescription) {
-                    short currentInstruction = segment.turnInstruction & TurnInstructions.InverseAccessRestrictionFlag;
+                	TurnInstruction currentInstruction = segment.turnInstruction & TurnInstructions.InverseAccessRestrictionFlag;
                     numberOfEnteredRestrictedAreas += (currentInstruction != segment.turnInstruction);
                 }
             }
@@ -164,6 +185,22 @@ public:
         }
         reply.content += "],";
 
+        //Get Names for both routes
+        RouteNames routeNames;
+        GetRouteNames(shortestSegments, alternativeSegments, sEngine, routeNames);
+
+        reply.content += "\"route_name\":[\"";
+        reply.content += routeNames.shortestPathName1;
+        reply.content += "\",\"";
+        reply.content += routeNames.shortestPathName2;
+        reply.content += "\"],"
+                "\"alternative_names\":[";
+        reply.content += "[\"";
+        reply.content += routeNames.alternativePathName1;
+        reply.content += "\",\"";
+        reply.content += routeNames.alternativePathName2;
+        reply.content += "\"]";
+        reply.content += "],";
         //list all viapoints so that the client may display it
         reply.content += "\"via_points\":[";
         std::string tmp;
@@ -209,13 +246,65 @@ public:
         reply.content += "}";
     }
 
+    void GetRouteNames(std::vector<Segment> & shortestSegments, std::vector<Segment> & alternativeSegments, const SearchEngineT &sEngine, RouteNames & routeNames) {
+        /*** extract names for both alternatives ***/
+
+        Segment shortestSegment1, shortestSegment2;
+        Segment alternativeSegment1, alternativeSegment2;
+
+        if(0 < shortestSegments.size()) {
+            sort(shortestSegments.begin(), shortestSegments.end(), boost::bind(&Segment::length, _1) > boost::bind(&Segment::length, _2) );
+            shortestSegment1 = shortestSegments[0];
+            if(0 < alternativeSegments.size()) {
+                sort(alternativeSegments.begin(), alternativeSegments.end(), boost::bind(&Segment::length, _1) > boost::bind(&Segment::length, _2) );
+                alternativeSegment1 = alternativeSegments[0];
+            }
+            std::vector<Segment> shortestDifference(shortestSegments.size());
+            std::vector<Segment> alternativeDifference(alternativeSegments.size());
+            std::set_difference(shortestSegments.begin(), shortestSegments.end(), alternativeSegments.begin(), alternativeSegments.end(), shortestDifference.begin(), boost::bind(&Segment::nameID, _1) < boost::bind(&Segment::nameID, _2) );
+            int size_of_difference = shortestDifference.size();
+            if(0 < size_of_difference ) {
+                unsigned i = 0;
+                while( i < size_of_difference && shortestDifference[i].nameID == shortestSegments[0].nameID) {
+                    ++i;
+                }
+                if(i < size_of_difference ) {
+                    shortestSegment2 = shortestDifference[i];
+                }
+            }
+
+            std::set_difference(alternativeSegments.begin(), alternativeSegments.end(), shortestSegments.begin(), shortestSegments.end(), alternativeDifference.begin(), boost::bind(&Segment::nameID, _1) < boost::bind(&Segment::nameID, _2) );
+            size_of_difference = alternativeDifference.size();
+            if(0 < size_of_difference ) {
+                unsigned i = 0;
+                while( i < size_of_difference && alternativeDifference[i].nameID == alternativeSegments[0].nameID) {
+                    ++i;
+                }
+                if(i < size_of_difference ) {
+                    alternativeSegment2 = alternativeDifference[i];
+                }
+            }
+            if(shortestSegment1.position > shortestSegment2.position)
+                std::swap(shortestSegment1, shortestSegment2);
+
+            if(alternativeSegment1.position >  alternativeSegment2.position)
+                std::swap(alternativeSegment1, alternativeSegment2);
+
+            routeNames.shortestPathName1 = sEngine.GetEscapedNameForNameID(shortestSegment1.nameID);
+            routeNames.shortestPathName2 = sEngine.GetEscapedNameForNameID(shortestSegment2.nameID);
+
+            routeNames.alternativePathName1 = sEngine.GetEscapedNameForNameID(alternativeSegment1.nameID);
+            routeNames.alternativePathName2 = sEngine.GetEscapedNameForNameID(alternativeSegment2.nameID);
+        }
+    }
+
     inline void WriteHeaderToOutput(std::string & output) {
         output += "{"
                 "\"version\": 0.3,"
                 "\"status\":";
     }
 
-    inline void BuildTextualDescription(DescriptionFactory & descriptionFactory, http::Reply & reply, const int lengthOfRoute, const SearchEngineT &sEngine) {
+    inline void BuildTextualDescription(DescriptionFactory & descriptionFactory, http::Reply & reply, const int lengthOfRoute, const SearchEngineT &sEngine, std::vector<Segment> & segmentVector) {
         //Segment information has following format:
         //["instruction","streetname",length,position,time,"length","earth_direction",azimuth]
         //Example: ["Turn left","High Street",200,4,10,"200m","NE",22.5]
@@ -226,7 +315,7 @@ public:
         std::string tmpDist, tmpLength, tmpDuration, tmpBearing, tmpInstruction;
         //Fetch data from Factory and generate a string from it.
         BOOST_FOREACH(const SegmentInformation & segment, descriptionFactory.pathDescription) {
-            short currentInstruction = segment.turnInstruction & TurnInstructions.InverseAccessRestrictionFlag;
+        	TurnInstruction currentInstruction = segment.turnInstruction & TurnInstructions.InverseAccessRestrictionFlag;
             numberOfEnteredRestrictedAreas += (currentInstruction != segment.turnInstruction);
             if(TurnInstructions.TurnIsNecessary( currentInstruction) ) {
                 if(TurnInstructions.EnterRoundAbout == currentInstruction) {
@@ -248,6 +337,8 @@ public:
                         intToString(currentInstruction, tmpInstruction);
                         reply.content += tmpInstruction;
                     }
+
+
                     reply.content += "\",\"";
                     reply.content += sEngine.GetEscapedNameForNameID(segment.nameID);
                     reply.content += "\",";
@@ -268,6 +359,8 @@ public:
                     intToString(round(segment.bearing), tmpBearing);
                     reply.content += tmpBearing;
                     reply.content += "]";
+
+                    segmentVector.push_back( Segment(segment.nameID, segment.length, segmentVector.size() ));
                 }
             } else if(TurnInstructions.StayOnRoundAbout == currentInstruction) {
                 ++roundAbout.leaveAtExit;
@@ -294,7 +387,6 @@ public:
             reply.content += "0.0";
             reply.content += "]";
         }
-
     }
 
 };

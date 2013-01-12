@@ -21,7 +21,7 @@ or see http://www.gnu.org/licenses/agpl.txt.
 #ifndef PHANTOMNODES_H_
 #define PHANTOMNODES_H_
 
-#include "ExtractorStructs.h"
+#include "Coordinate.h"
 
 struct PhantomNode {
     PhantomNode() : edgeBasedNode(UINT_MAX), nodeBasedEdgeNameID(UINT_MAX), weight1(INT_MAX), weight2(INT_MAX), ratio(0.) {}
@@ -45,6 +45,10 @@ struct PhantomNode {
     bool isValid(const unsigned numberOfNodes) const {
         return location.isValid() && (edgeBasedNode < numberOfNodes) && (weight1 != INT_MAX) && (ratio >= 0.) && (ratio <= 1.) && (nodeBasedEdgeNameID != UINT_MAX);
     }
+
+    bool operator==(const PhantomNode & other) const {
+        return location == other.location;
+    }
 };
 
 struct PhantomNodes {
@@ -61,6 +65,10 @@ struct PhantomNodes {
 
     bool AtLeastOnePhantomNodeIsUINTMAX() const {
         return !(startPhantom.edgeBasedNode == UINT_MAX || targetPhantom.edgeBasedNode == UINT_MAX);
+    }
+
+    bool PhantomNodesHaveEqualLocation() const {
+        return startPhantom == targetPhantom;
     }
 };
 

@@ -11,13 +11,21 @@ PREPROCESS_LOG_FILE = 'preprocessing.log'
 LOG_FILE = 'fail.log'
 OSM_TIMESTAMP = '2000-00-00T00:00:00Z'
 DEFAULT_SPEEDPROFILE = 'bicycle'
-WAY_SPACING = 10
+WAY_SPACING = 100
 DEFAULT_GRID_SIZE = 100   #meters
+PROFILES_PATH = '../profiles'
 
 ORIGIN = [1,1]
 
-def set_grid_size meters    
-  @zoom = 0.001*(meters.to_f/111.21)
+def sanitized_scenario_title
+  @sanitized_scenario_title ||= @scenario_title.gsub /[^0-9A-Za-z.\-]/, '_'
+end
+
+def set_grid_size meters
+  #the constant is calculated (with BigDecimal as: 1.0/(DEG_TO_RAD*EARTH_RADIUS_IN_METERS
+  #see ApproximateDistance() in ExtractorStructs.h
+  #it's only accurate when measuring along the equator, or going exactly north-south
+  @zoom = meters.to_f*0.8990679362704610899694577444566908445396483347536032203503E-5
 end
 
 def build_ways_from_table table
@@ -35,19 +43,23 @@ def build_ways_from_table table
     node2 = OSM::Node.new make_osm_id, OSM_USER, OSM_TIMESTAMP, ORIGIN[0]+(1+WAY_SPACING*ri)*@zoom, ORIGIN[1] 
     node3 = OSM::Node.new make_osm_id, OSM_USER, OSM_TIMESTAMP, ORIGIN[0]+(2+WAY_SPACING*ri)*@zoom, ORIGIN[1] 
     node4 = OSM::Node.new make_osm_id, OSM_USER, OSM_TIMESTAMP, ORIGIN[0]+(3+WAY_SPACING*ri)*@zoom, ORIGIN[1] 
+    node5 = OSM::Node.new make_osm_id, OSM_USER, OSM_TIMESTAMP, ORIGIN[0]+(4+WAY_SPACING*ri)*@zoom, ORIGIN[1] 
     node1.uid = OSM_UID
     node2.uid = OSM_UID
     node3.uid = OSM_UID
     node4.uid = OSM_UID
+    node5.uid = OSM_UID
     node1 << { :name => "a#{ri}" }
     node2 << { :name => "b#{ri}" }
     node3 << { :name => "c#{ri}" }
     node4 << { :name => "d#{ri}" }
+    node5 << { :name => "e#{ri}" }
 
     osm_db << node1
     osm_db << node2
     osm_db << node3
     osm_db << node4
+    osm_db << node5
     
     #...with a way between them
     way = OSM::Way.new make_osm_id, OSM_USER, OSM_TIMESTAMP
@@ -56,12 +68,37 @@ def build_ways_from_table table
     way << node2
     way << node3
     way << node4
+    way << node5
+    
     tags = row.dup
     tags.delete 'forw'
     tags.delete 'backw'
-    tags['name'] = "w#{ri}"
     tags.reject! { |k,v| v=='' }
-    way << tags
+    
+    # sort tag keys in the form of 'node/....'
+    way_tags = { 'highway' => 'primary' }
+    
+    node_tags = {}
+    tags.each_pair do |k,v|
+      if k =~ /node\/(.*)/
+        if v=='(nil)'
+          node_tags.delete k
+        else
+          node_tags[$1] = v
+        end
+      else
+        if v=='(nil)'
+          way_tags.delete k
+        else
+          way_tags[k] = v
+        end
+      end
+    end
+    
+    way_tags['name'] = "w#{ri}"
+    way << way_tags
+    node3 << node_tags
+    
     osm_db << way
   end
 end
@@ -79,7 +116,7 @@ def reset_data
     #clear_log
     #clear_data_files
   end
-  reset_speedprofile
+  reset_profile
   reset_osm
   @fingerprint = nil
 end
@@ -94,10 +131,6 @@ def reset_osm
   name_way_hash.clear
   @osm_str = nil
   @osm_hash = nil
-  
-  ##ID -1 causes trouble, so add a few nodes to avoid it
-  #node = OSM::Node.new nil, OSM_USER, OSM_TIMESTAMP, 0,0 
-  #node = OSM::Node.new nil, OSM_USER, OSM_TIMESTAMP, 0,0 
   @osm_id = 0
 end
 
@@ -130,10 +163,10 @@ def osm_str
   @osm_str
 end
 
-def write_osm  
+def write_osm 
   #write .oms file if needed
   Dir.mkdir DATA_FOLDER unless File.exist? DATA_FOLDER
-  @osm_file = "#{DATA_FOLDER}/#{fingerprint}"
+  @osm_file = "#{DATA_FOLDER}/#{sanitized_scenario_title}_#{fingerprint}"
   unless File.exist?("#{@osm_file}.osm")
     File.open( "#{@osm_file}.osm", 'w') {|f| f.write(osm_str) }
   end
@@ -143,9 +176,8 @@ def convert_osm_to_pbf
   unless File.exist?("#{@osm_file}.osm.pbf")
     log_preprocess_info
     log "== Converting #{@osm_file}.osm to protobuffer format...", :preprocess
-    #redirect stdout and stderr to a log file avoid output in the cucumber console
     unless system "osmosis --read-xml #{@osm_file}.osm --write-pbf #{@osm_file}.osm.pbf omitmetadata=true 1>>#{PREPROCESS_LOG_FILE} 2>>#{PREPROCESS_LOG_FILE}"
-      raise "Failed to convert to proto buffer format. Please see #{hash}.log for more info." 
+      raise OsmosisError.new $?, "osmosis exited with code #{$?.exitstatus}"
     end
     log '', :preprocess
   end
@@ -158,30 +190,33 @@ def extracted?
 end
 
 def prepared?
-  base = "#{DATA_FOLDER}/#{fingerprint}"
-  File.exist?("#{base}.osrm.hsgr")
+  File.exist?("#{@osm_file}.osrm.hsgr")
+end
+
+def write_timestamp
+  File.open( "#{@osm_file}.osrm.timestamp", 'w') {|f| f.write(OSM_TIMESTAMP) }
 end
 
 def reprocess
   Dir.chdir TEST_FOLDER do
-    write_speedprofile
     write_osm
+    write_timestamp
     convert_osm_to_pbf
     unless extracted?
       log_preprocess_info
       log "== Extracting #{@osm_file}.osm...", :preprocess
-      unless system "../osrm-extract #{@osm_file}.osm.pbf 1>>#{PREPROCESS_LOG_FILE} 2>>#{PREPROCESS_LOG_FILE}"
+      unless system "../osrm-extract #{@osm_file}.osm.pbf 1>>#{PREPROCESS_LOG_FILE} 2>>#{PREPROCESS_LOG_FILE} #{PROFILES_PATH}/#{@profile}.lua"
         log "*** Exited with code #{$?.exitstatus}.", :preprocess
-        raise "*** osrm-extract exited with code #{$?.exitstatus}. The file preprocess.log might contain more info." 
+        raise ExtractError.new $?.exitstatus, "osrm-extract exited with code #{$?.exitstatus}."
       end
       log '', :preprocess
     end
     unless prepared?
       log_preprocess_info
       log "== Preparing #{@osm_file}.osm...", :preprocess
-      unless system "../osrm-prepare #{@osm_file}.osrm #{@osm_file}.osrm.restrictions 1>>#{PREPROCESS_LOG_FILE} 2>>#{PREPROCESS_LOG_FILE}"
+      unless system "../osrm-prepare #{@osm_file}.osrm #{@osm_file}.osrm.restrictions 1>>#{PREPROCESS_LOG_FILE} 2>>#{PREPROCESS_LOG_FILE} #{PROFILES_PATH}/#{@profile}.lua"
         log "*** Exited with code #{$?.exitstatus}.", :preprocess
-        raise "*** osrm-prepare exited with code #{$?.exitstatus}. The file preprocess.log might contain more info." 
+        raise PrepareError.new $?.exitstatus, "osrm-prepare exited with code #{$?.exitstatus}."
       end 
       log '', :preprocess
     end
@@ -189,4 +224,3 @@ def reprocess
     write_server_ini
   end
 end
-
