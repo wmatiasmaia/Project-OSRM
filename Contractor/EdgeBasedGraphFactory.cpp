@@ -257,7 +257,6 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
 	INFO("After trivial contraction: " << _nodeBasedGraph->GetNumberOfEdges() << ", deleted1 " << deletedNodes1.size() << ", deleted2 " << deletedNodes2.size() << " nodes");
 	INFO("Double deleted1: " << (size1 - deletedNodes1.size()) << ", double2:"  << (size2 - deletedNodes2.size()));
 
-
 	/*****************/
 
 	INFO("Identifying small components");
