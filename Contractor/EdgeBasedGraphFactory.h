@@ -127,8 +127,6 @@ private:
             bool belongsToTinyComponent);
     template<class CoordinateT>
     double GetAngleBetweenTwoEdges(const CoordinateT& A, const CoordinateT& C, const CoordinateT& B) const;
-//    SRTMLookup srtmLookup;
-
 
 public:
     template< class InputEdgeT >
