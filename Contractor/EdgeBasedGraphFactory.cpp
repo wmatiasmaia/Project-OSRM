@@ -197,9 +197,9 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
 		for(_NodeBasedDynamicGraph::EdgeIterator e1 = _nodeBasedGraph->BeginEdges(u); e1 < _nodeBasedGraph->EndEdges(u); ++e1) {
 			_NodeBasedDynamicGraph::NodeIterator v = _nodeBasedGraph->GetTarget(e1);
 			//TODO: if v is bollard, continue
-			const _NodeBasedDynamicGraph::EdgeData edgeData1 = _nodeBasedGraph->GetEdgeData(e1);
+			const _NodeBasedDynamicGraph::EdgeData & edgeData1 = _nodeBasedGraph->GetEdgeData(e1);
 			for(_NodeBasedDynamicGraph::EdgeIterator e2 = _nodeBasedGraph->BeginEdges(v); e2 < _nodeBasedGraph->EndEdges(v); ++e2) {
-				const _NodeBasedDynamicGraph::EdgeData edgeData2 = _nodeBasedGraph->GetEdgeData(e2);
+				const _NodeBasedDynamicGraph::EdgeData & edgeData2 = _nodeBasedGraph->GetEdgeData(e2);
 				_NodeBasedDynamicGraph::NodeIterator w = _nodeBasedGraph->GetTarget(e2);
 				if( (1 == in_degrees_vector[v]) && (1 == _nodeBasedGraph->GetOutDegree(v)) ) {
 					//check if u != w
@@ -209,14 +209,15 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
 								edgeData1.backward == edgeData2.backward && edgeData1.isAccessRestricted == edgeData2.isAccessRestricted) {
 
 							//remove edges (u,v), (v,w)
-							//                    _nodeBasedGraph->DeleteEdgesTo(u, v);
-							//                    _nodeBasedGraph->DeleteEdgesTo(v, w);
+							_nodeBasedGraph->DeleteEdgesTo(u, v);
+							_nodeBasedGraph->DeleteEdgesTo(v, w);
 
-							//add edge (v,w) with combined distance
-							//                    _NodeBasedEdgeData newEdgeData;
-							//                    newEdgeData = edgeData1; newEdgeData.distance += edgeData2.distance;
+							//create (v,w) with combined data
+							_NodeBasedEdgeData newEdgeData;
+							newEdgeData = edgeData1; newEdgeData.distance += edgeData2.distance;
 							++triviallySkippedEdges;
-							//						_nodeBasedGraph->InsertEdge(u, w, newEdgeData);
+							//add new edge (v,w)
+							_nodeBasedGraph->InsertEdge(u, w, newEdgeData);
 							deletedNodes1.push_back(v);
 						}
 					}
@@ -226,15 +227,17 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
 						double testAngle = GetAngleBetweenTwoEdges(inputNodeInfoList[u], inputNodeInfoList[v], inputNodeInfoList[w]);
 						if((testAngle > 179. && testAngle < 181.) && edgeData1.nameID == edgeData2.nameID &&
 								edgeData1.backward == edgeData2.backward && edgeData1.isAccessRestricted == edgeData2.isAccessRestricted) {
-							//remove edges (u,v), (v,w)
-							//                    _nodeBasedGraph->DeleteEdgesTo(u, v);
-							//                    _nodeBasedGraph->DeleteEdgesTo(v, w);
 
-							//add edge (v,w) with combined distance
-							//                    _NodeBasedEdgeData newEdgeData;
-							//                    newEdgeData = edgeData1; newEdgeData.distance += edgeData2.distance;
+							//remove edges (u,v), (v,w)
+							_nodeBasedGraph->DeleteEdgesTo(u, v);
+							_nodeBasedGraph->DeleteEdgesTo(v, w);
+
+							//create (v,w) with combined data
+							_NodeBasedEdgeData newEdgeData;
+							newEdgeData = edgeData1; newEdgeData.distance += edgeData2.distance;
 							++triviallySkippedEdges;
-							//						_nodeBasedGraph->InsertEdge(u, w, newEdgeData);
+							//add new edge (v,w)
+							_nodeBasedGraph->InsertEdge(u, w, newEdgeData);
 							deletedNodes2.push_back(v);
 						}
 					}
@@ -243,11 +246,16 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
 		}
 	}
 
+	int size1 = deletedNodes1.size();
+	int size2 = deletedNodes2.size();
+
+
 	std::sort(deletedNodes1.begin(), deletedNodes1.end());
 	deletedNodes1.erase(std::unique(deletedNodes1.begin(), deletedNodes1.end()), deletedNodes1.end());
 	std::sort(deletedNodes2.begin(), deletedNodes2.end());
 	deletedNodes2.erase(std::unique(deletedNodes2.begin(), deletedNodes2.end()), deletedNodes2.end());
 	INFO("After trivial contraction: " << _nodeBasedGraph->GetNumberOfEdges() << ", deleted1 " << deletedNodes1.size() << ", deleted2 " << deletedNodes2.size() << " nodes");
+	INFO("Double deleted1: " << (size1 - deletedNodes1.size()) << ", double2:"  << (size2 - deletedNodes2.size()));
 
 
 	/*****************/
