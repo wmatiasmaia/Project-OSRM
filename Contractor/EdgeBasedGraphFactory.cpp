@@ -160,10 +160,10 @@ bool EdgeBasedGraphFactory::CheckIfTurnIsRestricted(const NodeID u, const NodeID
 }
 
 void EdgeBasedGraphFactory::InsertEdgeBasedNode(
-		InternalNodeBasedDynamicGraph::EdgeIterator edge_iterator,
-		InternalNodeBasedDynamicGraph::NodeIterator u,
-		InternalNodeBasedDynamicGraph::NodeIterator v,
-		bool belongsToTinyComponent) {
+		const InternalNodeBasedDynamicGraph::EdgeIterator edge_iterator,
+		const InternalNodeBasedDynamicGraph::NodeIterator u,
+		const InternalNodeBasedDynamicGraph::NodeIterator v,
+		const bool belongsToTinyComponent) {
 	InternalNodeBasedDynamicGraph::EdgeData & data = m_node_based_dynamic_graph->GetEdgeData(edge_iterator);
 	EdgeBasedNode current_node;
 	current_node.nameID = data.nameID;
@@ -229,12 +229,22 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
 					//Is the angle close to geometric unimportance (<-- lovely phrase)
 					double angle_of_uvw_turn = GetAngleBetweenTwoEdges(m_node_info_list_vector[u], m_node_info_list_vector[v], m_node_info_list_vector[w]);
 					//Check if edge data is sufficiently equal
-					if((angle_of_uvw_turn > 179. && angle_of_uvw_turn < 181.) && edge_uv_data.nameID == edge_vw_data.nameID &&
-							edge_uv_data.backward == edge_vw_data.backward && edge_uv_data.isAccessRestricted == edge_vw_data.isAccessRestricted) {
+					if((angle_of_uvw_turn > 179. && angle_of_uvw_turn < 181.)
+							&& edge_uv_data.nameID 				== edge_vw_data.nameID
+							&& edge_uv_data.forward 			== edge_vw_data.forward
+							&& edge_uv_data.backward 			== edge_vw_data.backward
+							&& edge_uv_data.type 				== edge_vw_data.type
+							&& edge_uv_data.isAccessRestricted 	== edge_vw_data.isAccessRestricted) {
+
+
+						const InternalNodeBasedDynamicGraph::EdgeData & edge_vu_data = m_node_based_dynamic_graph->GetEdgeData(m_node_based_dynamic_graph->FindEdge(v,u));
+						const InternalNodeBasedDynamicGraph::EdgeData & edge_wv_data = m_node_based_dynamic_graph->GetEdgeData(m_node_based_dynamic_graph->FindEdge(w,v));
 
 						//remove edges (u,v), (v,w)
 						m_node_based_dynamic_graph->DeleteEdgesTo(u, v);
 						m_node_based_dynamic_graph->DeleteEdgesTo(v, w);
+						m_node_based_dynamic_graph->DeleteEdgesTo(v, u);
+						m_node_based_dynamic_graph->DeleteEdgesTo(w, v);
 
 						//create (v,w) with combined data
 						InternalNodeBasedEdgeData new_edge_data;
@@ -247,8 +257,14 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
 							++number_of_skipped_edges;
 
 						//add new edge (v,w) only if it doen not exist yet
-						if(m_node_based_dynamic_graph->EndEdges(u) ==m_node_based_dynamic_graph->FindEdge(u,w))
+						if(m_node_based_dynamic_graph->EndEdges(u) == m_node_based_dynamic_graph->FindEdge(u,w))
 							m_node_based_dynamic_graph->InsertEdge(u, w, new_edge_data);
+
+						//adjust edge data
+						new_edge_data = edge_vu_data; new_edge_data.distance += edge_wv_data.distance;
+
+						if(m_node_based_dynamic_graph->EndEdges(w) == m_node_based_dynamic_graph->FindEdge(w,u))
+							m_node_based_dynamic_graph->InsertEdge(w, u, new_edge_data);
 						deleted_nodes.push_back(v);
 					}
 				}
@@ -270,13 +286,53 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
 	std::vector<unsigned>().swap(in_degrees_vector);
 	std::vector<unsigned>().swap(deleted_nodes);
 
+	//loop over graph and generate contigous(!) edgebasedNodeIDs
+	unsigned edge_based_nodeID_counter = 0;
+	for(InternalNodeBasedDynamicGraph::NodeIterator u = 0; u < m_node_based_dynamic_graph->GetNumberOfNodes(); ++u ) {
+		for(InternalNodeBasedDynamicGraph::EdgeIterator forward_edge_iterator = m_node_based_dynamic_graph->BeginEdges(u); forward_edge_iterator < m_node_based_dynamic_graph->EndEdges(u); ++forward_edge_iterator) {
+			InternalNodeBasedDynamicGraph::NodeIterator v = m_node_based_dynamic_graph->GetTarget(forward_edge_iterator);
+			InternalNodeBasedDynamicGraph::EdgeData & forward_edge_data = m_node_based_dynamic_graph->GetEdgeData(forward_edge_iterator);
+			if(UINT_MAX == forward_edge_data.edgeBasedNodeID && forward_edge_data.forward) {
+				forward_edge_data.edgeBasedNodeID = edge_based_nodeID_counter++;
+//				if(edge_based_nodeID_counter == 46074) {
+//					INFO("(" << u << "," << v << "): " << m_node_info_list_vector[u].lat/100000. << "," << m_node_info_list_vector[u].lon/100000. << "->" << m_node_info_list_vector[v].lat/100000. << "," << m_node_info_list_vector[v].lon/100000.)
+//					INFO(forward_edge_data.edgeBasedNodeID << ": fw: " << (forward_edge_data.forward ? "yes" : "no") << ", bw: " << (forward_edge_data.backward ? "yes" : "no"))
+//					ERR("has reverse: " << ( ( m_node_based_dynamic_graph->FindEdge(v,u) < m_node_based_dynamic_graph->EndEdges(v))? "yes":"no"))
+//				}
+				//Check if edge (v,u) also exists and if yes, then give it ID+1
+				InternalNodeBasedDynamicGraph::EdgeIterator reverse_edge_iterator = m_node_based_dynamic_graph->FindEdge(v,u);
+				if(reverse_edge_iterator < m_node_based_dynamic_graph->EndEdges(v)) {
+					InternalNodeBasedDynamicGraph::EdgeData & reverse_edge_data = m_node_based_dynamic_graph->GetEdgeData(reverse_edge_iterator);
+					if(UINT_MAX == reverse_edge_data.edgeBasedNodeID) {
+						reverse_edge_data.edgeBasedNodeID = edge_based_nodeID_counter++;
+//						if(edge_based_nodeID_counter == 46074) {
+//							ERR(reverse_edge_data.edgeBasedNodeID << ": fw: " << (reverse_edge_data.forward ? "yes" : "no") << ", bw: " << (reverse_edge_data.backward ? "yes" : "no"))
+//						}
+//					} else {
+//						INFO("fwd-edge-id: " << forward_edge_data.edgeBasedNodeID << ", rev-edge-id: " <<  reverse_edge_data.edgeBasedNodeID);
+//						for(InternalNodeBasedDynamicGraph::EdgeIterator f2 = m_node_based_dynamic_graph->BeginEdges(u); f2 < m_node_based_dynamic_graph->EndEdges(u); ++f2) {
+//							INFO("edge (" << u << "," << m_node_based_dynamic_graph->GetTarget(f2) << ")")
+//						}
+//						for(InternalNodeBasedDynamicGraph::EdgeIterator f2 = m_node_based_dynamic_graph->BeginEdges(v); f2 < m_node_based_dynamic_graph->EndEdges(v); ++f2) {
+//							INFO("edge (" << v << "," << m_node_based_dynamic_graph->GetTarget(f2) << ")")
+//						}
+//
+//						ERR("Should not happen, u:" << u << ", v:" << v << ", fwd-iter: " << forward_edge_iterator << ", rev-iter: " << reverse_edge_iterator);
+					}
+				}
+			}
+		}
+	}
+
+
+
 	//Identify small components
 	INFO("Identifying small components");
 	//Run a BFS on the undirected graph and identify small components
 	std::queue<std::pair<NodeID, NodeID> > bfs_queue;
 	std::vector<unsigned> component_indices_vector(m_node_based_dynamic_graph->GetNumberOfNodes(), UINT_MAX);
 	std::vector<NodeID> vectorOfComponentSizes;
-	unsigned current_component_id = 0, sizeOfCurrentComponent = 0;
+	unsigned current_component_id = 0, current_component_size = 0;
 	//put unexplorered node with parent pointer into queue
 	for(NodeID node = 0, endNodes = m_node_based_dynamic_graph->GetNumberOfNodes(); node < endNodes; ++node) {
 		if(UINT_MAX == component_indices_vector[node]) {
@@ -292,7 +348,7 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
 				const NodeID v = currentQueueItem.first;  //current node
 				const NodeID u = currentQueueItem.second; //parent
 				//increment size counter of current component
-				++sizeOfCurrentComponent;
+				++current_component_size;
 				const bool isBollardNode = (m_barrier_nodes_map.find(v) != m_barrier_nodes_map.end());
 				if(!isBollardNode) {
 					const NodeID onlyToNode = CheckForEmanatingIsOnlyTurn(u, v);
@@ -319,62 +375,28 @@ void EdgeBasedGraphFactory::Run(const char * originalEdgeDataFilename) {
 				}
 			}
 			//push size into vector
-			vectorOfComponentSizes.push_back(sizeOfCurrentComponent);
+			vectorOfComponentSizes.push_back(current_component_size);
 			//reset counters;
-			sizeOfCurrentComponent = 0;
+			current_component_size = 0;
 			++current_component_id;
 		}
 	}
 	INFO("identified: " << vectorOfComponentSizes.size() << " many components");
 
 	/*********/
-
-	unsigned edgeBasedNodeIDCounter = 0;
-
-	//loop over graph and generate contigous(!) edgebasedNodeIDs
-	for(InternalNodeBasedDynamicGraph::NodeIterator u = 0; u < m_node_based_dynamic_graph->GetNumberOfNodes(); ++u ) {
-		for(InternalNodeBasedDynamicGraph::EdgeIterator forward_edge_iterator = m_node_based_dynamic_graph->BeginEdges(u); forward_edge_iterator < m_node_based_dynamic_graph->EndEdges(u); ++forward_edge_iterator) {
-			InternalNodeBasedDynamicGraph::NodeIterator v = m_node_based_dynamic_graph->GetTarget(forward_edge_iterator);
-			InternalNodeBasedDynamicGraph::EdgeData & forward_edge_data = m_node_based_dynamic_graph->GetEdgeData(forward_edge_iterator);
-			if(UINT_MAX == forward_edge_data.edgeBasedNodeID && forward_edge_data.forward) {
-				forward_edge_data.edgeBasedNodeID = edgeBasedNodeIDCounter; edgeBasedNodeIDCounter++;
-				//Check if edge (v,u) also exists and if yes, then give it ID+1
-				InternalNodeBasedDynamicGraph::EdgeIterator reverse_edge_iterator = m_node_based_dynamic_graph->FindEdge(v,u);
-				if(reverse_edge_iterator < m_node_based_dynamic_graph->EndEdges(v)) {
-					InternalNodeBasedDynamicGraph::EdgeData & reverse_edge_data = m_node_based_dynamic_graph->GetEdgeData(reverse_edge_iterator);
-					if(UINT_MAX == reverse_edge_data.edgeBasedNodeID) {
-						reverse_edge_data.edgeBasedNodeID = edgeBasedNodeIDCounter; edgeBasedNodeIDCounter++;
-					} else {
-						INFO("fwd-edge-id: " << forward_edge_data.edgeBasedNodeID << ", rev-edge-id: " <<  reverse_edge_data.edgeBasedNodeID);
-						for(InternalNodeBasedDynamicGraph::EdgeIterator f2 = m_node_based_dynamic_graph->BeginEdges(u); f2 < m_node_based_dynamic_graph->EndEdges(u); ++f2) {
-							INFO("edge (" << u << "," << m_node_based_dynamic_graph->GetTarget(f2) << ")")
-						}
-						for(InternalNodeBasedDynamicGraph::EdgeIterator f2 = m_node_based_dynamic_graph->BeginEdges(v); f2 < m_node_based_dynamic_graph->EndEdges(v); ++f2) {
-							INFO("edge (" << v << "," << m_node_based_dynamic_graph->GetTarget(f2) << ")")
-						}
-
-						ERR("Should not happen, u:" << u << ", v:" << v << ", fwd-iter: " << forward_edge_iterator << ", rev-iter: " << reverse_edge_iterator);
-					}
-				}
-			}
-		}
-	}
-
 	INFO("generating edge-expanded nodes");
 
 	//loop over all edges and generate new set of nodes.
 	for(InternalNodeBasedDynamicGraph::NodeIterator u = 0; u < m_node_based_dynamic_graph->GetNumberOfNodes(); ++u ) {
-		for(InternalNodeBasedDynamicGraph::EdgeIterator e1 = m_node_based_dynamic_graph->BeginEdges(u); e1 < m_node_based_dynamic_graph->EndEdges(u); ++e1) {
-			InternalNodeBasedDynamicGraph::NodeIterator v = m_node_based_dynamic_graph->GetTarget(e1);
-			//			if(UINT_MAX == u || UINT_MAX == v)
-			//				continue;
-			if(m_node_based_dynamic_graph->GetEdgeData(e1).type != SHRT_MAX) {
-				assert(e1 != UINT_MAX);
+		for(InternalNodeBasedDynamicGraph::EdgeIterator edge_uv_iterator = m_node_based_dynamic_graph->BeginEdges(u); edge_uv_iterator < m_node_based_dynamic_graph->EndEdges(u); ++edge_uv_iterator) {
+			InternalNodeBasedDynamicGraph::NodeIterator v = m_node_based_dynamic_graph->GetTarget(edge_uv_iterator);
+			if(m_node_based_dynamic_graph->GetEdgeData(edge_uv_iterator).type != SHRT_MAX) {
+				assert(edge_uv_iterator != UINT_MAX);
 				assert(u != UINT_MAX);
 				assert(v != UINT_MAX);
 				//                INFO("u: " << u << ", v: " << v << ", componentsIndex[u]: " << componentsIndex[u] << ", componentsIndex[v]: " << componentsIndex[v]);
 				//edges that end on bollard nodes may actually be in two distinct components
-				InsertEdgeBasedNode(e1, u, v, (std::min(vectorOfComponentSizes[component_indices_vector[u]], vectorOfComponentSizes[component_indices_vector[v]]) < 1000) );
+				InsertEdgeBasedNode(edge_uv_iterator, u, v, (std::min(vectorOfComponentSizes[component_indices_vector[u]], vectorOfComponentSizes[component_indices_vector[v]]) < 1000) );
 			}
 		}
 	}

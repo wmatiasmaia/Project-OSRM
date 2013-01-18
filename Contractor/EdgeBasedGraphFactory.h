@@ -138,10 +138,10 @@ private:
     NodeID CheckForEmanatingIsOnlyTurn(const NodeID u, const NodeID v) const;
     bool CheckIfTurnIsRestricted(const NodeID u, const NodeID v, const NodeID w) const;
     void InsertEdgeBasedNode(
-            InternalNodeBasedDynamicGraph::EdgeIterator e1,
-            InternalNodeBasedDynamicGraph::NodeIterator u,
-            InternalNodeBasedDynamicGraph::NodeIterator v,
-            bool belongsToTinyComponent);
+    		const InternalNodeBasedDynamicGraph::EdgeIterator e1,
+    		const InternalNodeBasedDynamicGraph::NodeIterator u,
+    		const InternalNodeBasedDynamicGraph::NodeIterator v,
+    		const bool belongsToTinyComponent);
     template<class CoordinateT>
     double GetAngleBetweenTwoEdges(const CoordinateT& A, const CoordinateT& C, const CoordinateT& B) const;
 };

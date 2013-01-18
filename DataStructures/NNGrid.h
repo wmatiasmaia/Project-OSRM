@@ -99,6 +99,7 @@ public:
     	//TODO: Implement this using STXXL-Streams
         Percent p(edgeList.size());
         BOOST_FOREACH(EdgeT & edge, edgeList) {
+        	INFO("Adding edge with id: " << edge.id);
             p.printIncrement();
             if(edge.ignoreInGrid)
                 continue;

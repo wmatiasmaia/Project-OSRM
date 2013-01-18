@@ -140,11 +140,11 @@ public:
     }
 
     EdgeIterator BeginEdges( const NodeIterator &n ) const {
-        return EdgeIterator( _nodes[n].firstEdge );
+        return ( n < GetNumberOfNodes() ? EdgeIterator( _nodes[n].firstEdge) : GetNumberOfNodes() );
     }
 
     EdgeIterator EndEdges( const NodeIterator &n ) const {
-        return EdgeIterator( _nodes[n+1].firstEdge );
+        return ( n < GetNumberOfNodes() ? EdgeIterator( _nodes[n+1].firstEdge) : GetNumberOfNodes() );
     }
 
     //searches for a specific edge
