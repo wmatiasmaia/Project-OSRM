@@ -19,15 +19,17 @@
  */
 
 #include "ScriptingEnvironment.h"
+#include "../DataStructures/LuaRouteIterator.h"
 
-ScriptingEnvironment::ScriptingEnvironment() {}
 ScriptingEnvironment::ScriptingEnvironment(const char * fileName) {
 	INFO("Using script " << fileName);
 
     // Create a new lua state
-    for(int i = 0; i < omp_get_max_threads(); ++i)
+    for(int i = 0; i < omp_get_max_threads(); ++i) {
+        INFO("pushing lua state");
         luaStateVector.push_back(luaL_newstate());
-
+    }
+    
     // Connect LuaBind to this lua state for all threads
 #pragma omp parallel
     {
@@ -52,7 +54,19 @@ ScriptingEnvironment::ScriptingEnvironment(const char * fileName) {
                                      .def("Find", &HashTable<std::string, std::string>::Find)
                                      .def("Holds", &HashTable<std::string, std::string>::Holds)
                                      ];
+                            
+                            
+         luabind::module(myLuaState) [
+                                      luabind::class_<ExtractorRoute>("ExtractorRoute")
+                                      .def_readwrite("id", &ExtractorRoute::id)
+                                      .def_readwrite("tags", &ExtractorRoute::tags)
+                                      ];
 
+         luabind::module(myLuaState) [
+                                      luabind::class_<LuaRouteIterator>("routes")
+                                      .def("Next", &LuaRouteIterator::Next)
+                                      ];
+                                      
         luabind::module(myLuaState) [
                                      luabind::class_<ImportNode>("Node")
                                      .def(luabind::constructor<>())
@@ -67,6 +81,7 @@ ScriptingEnvironment::ScriptingEnvironment(const char * fileName) {
         luabind::module(myLuaState) [
                                      luabind::class_<ExtractionWay>("Way")
                                      .def(luabind::constructor<>())
+                                     .def_readwrite("id", &ExtractionWay::id)
                                      .def_readwrite("name", &ExtractionWay::name)
                                      .def_readwrite("speed", &ExtractionWay::speed)
                                      .def_readwrite("backward_speed", &ExtractionWay::backward_speed)

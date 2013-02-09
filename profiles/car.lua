@@ -35,7 +35,6 @@ speed_profile = {
 take_minimum_of_speeds 	= false
 obey_oneway 			= true
 obey_bollards 			= true
-use_restrictions 		= true
 ignore_areas 			= true -- future feature
 traffic_signal_penalty 	= 2
 u_turn_penalty 			= 20
@@ -89,7 +88,7 @@ function node_function (node)
 end
 
 
-function way_function (way)
+function way_function (way, routes, numberOfNodesInWay)
   -- First, get the properties of each way that we come across
     local highway = way.tags:Find("highway")
     local name = way.tags:Find("name")

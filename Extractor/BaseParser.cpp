@@ -21,10 +21,14 @@ or see http://www.gnu.org/licenses/agpl.txt.
 #include "BaseParser.h"
 
 BaseParser::BaseParser(ExtractorCallbacks* ec, ScriptingEnvironment& se) :
-extractor_callbacks(ec), scriptingEnvironment(se), luaState(NULL), use_turn_restrictions(true) {
-    luaState = se.getLuaStateForThreadID(0);
+extractor_callbacks(ec),
+scriptingEnvironment(se),
+luaState(se.getLuaStateForThreadID(0)),
+use_turn_restrictions(true),
+use_route_relations(false) {
     ReadUseRestrictionsSetting();
     ReadRestrictionExceptions();
+    ReadUseRouteRelationSetting();
 }
 
 void BaseParser::ReadUseRestrictionsSetting() {
@@ -61,6 +65,20 @@ void BaseParser::ReadRestrictionExceptions() {
         }
     } else {
         INFO("Found no exceptions to turn restrictions");
+    }
+}
+
+void BaseParser::ReadUseRouteRelationSetting() {
+    if( 0 != luaL_dostring( luaState, "return use_route_relations\n") ) {
+        ERR(lua_tostring( luaState,-1)<< " occured in scripting block");
+    }
+    if( lua_isboolean( luaState, -1) ) {
+        use_route_relations = lua_toboolean(luaState, -1);
+    }
+    if( use_route_relations ) {
+        INFO("Using route relations" );
+    } else {
+        INFO("Ignoring route relations" );
     }
 }
 

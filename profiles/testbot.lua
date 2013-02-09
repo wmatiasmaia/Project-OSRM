@@ -22,6 +22,7 @@ use_restrictions 		= true
 ignore_areas 			= true	-- future feature
 traffic_signal_penalty 	= 7		-- seconds
 u_turn_penalty 			= 20
+use_route_relations     = true
 
 function limit_speed(speed, limits)
     -- don't use ipairs(), since it stops at the first nil value
@@ -46,7 +47,7 @@ function node_function (node)
 	return 1
 end
 
-function way_function (way)
+function way_function (way, routes, numberOfNodesInWay)
 	local highway = way.tags:Find("highway")
 	local name = way.tags:Find("name")
 	local oneway = way.tags:Find("oneway")
@@ -68,8 +69,40 @@ function way_function (way)
     		local temp_speed = speed_forw;
     		speed_forw = temp_speed*1.5
     		speed_back = temp_speed/1.5
-   	end
-            	
+        end
+        
+        -- routes
+        local printed = false
+        local onRoute = false
+        while true do
+        	local role, route = routes:Next()
+            if route == nil then
+                break
+            end
+            
+            if printed == false then
+                print( "way: " .. tostring(way.tags:Find("name")) )
+                printed = true
+            end
+            print( "  route: " .. tostring(route.id) .. ", role: " .. role )
+            print( "    tag: route=" .. tostring(route.tags:Find("route")) )
+            print( "    tag: funk=" .. tostring(route.tags:Find("funk")) )
+            print( "    tag: love=" .. tostring(route.tags:Find("love")) )
+
+            if route.tags:Find("route")=='bot' then
+            	local factor = 2
+                if route.tags:Find("style") == "turbo" then
+                    factor = 4
+                end
+                if role ~= "backward" then
+        		    speed_forw = speed_forw*factor
+        		end
+        		if role ~= "forward" then
+                    speed_back = speed_back*factor
+                end
+            end
+    	end
+         	
         if maxspeed_forward ~= nil and maxspeed_forward > 0 then
 			speed_forw = maxspeed_forward
 		else

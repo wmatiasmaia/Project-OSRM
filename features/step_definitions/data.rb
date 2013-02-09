@@ -108,7 +108,7 @@ Given /^the relations$/ do |table|
       elsif key =~ /^(.*):(.*)/
         raise "*** unknown relation member type '#{$1}', must be either 'node' or 'way'"
       else
-        relation << { key => value }
+        relation << { key => value } if value != ''
       end
     end
     relation.uid = OSM_UID

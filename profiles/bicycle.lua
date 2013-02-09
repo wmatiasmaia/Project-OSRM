@@ -93,6 +93,8 @@ u_turn_penalty 			= 20
 use_turn_restrictions   = false
 turn_penalty 			= 60
 turn_bias               = 1.4
+use_route_relations     = true
+
 -- End of globals
 
 function get_exceptions(vector)
@@ -129,7 +131,7 @@ function node_function (node)
 	return 1
 end
 
-function way_function (way)
+function way_function (way, routes, numberOfNodesInWay)
 	-- initial routability check, filters out buildings, boundaries, etc
 	local highway = way.tags:Find("highway")
 	local route = way.tags:Find("route")
@@ -178,17 +180,6 @@ function way_function (way)
 	local foot = way.tags:Find("foot")
 	local surface = way.tags:Find("surface")
 
-	-- name	
-	if "" ~= ref and "" ~= name then
-		way.name = name .. ' / ' .. ref
-    elseif "" ~= ref then
-    	way.name = ref
-	elseif "" ~= name then
-		way.name = name
-	else
-		way.name = "{highway:"..highway.."}"	-- if no name exists, use way type
-		                                        -- this encoding scheme is excepted to be a temporary solution
-	end
 		
 	-- speed
     if route_speeds[route] then
@@ -323,6 +314,48 @@ function way_function (way)
 		if maxspeed and maxspeed>0 then
 			way.speed = math.min(way.speed, maxspeed)
 		end
+	end
+
+    -- bicycle routes
+    local factor = 1
+    local routeName = nil
+    
+    while true do
+    	local role, route = routes:Next()
+        if route==nil then
+            break
+        end
+        
+        if route.tags:Find("route")=='bicycle' then
+            network = route.tags:Find("network")
+            route_name = route.tags:Find("name")    -- TODO choose name if there are several routes
+            
+            -- until we have separate speed/impedance, we have to use speed,
+            -- even though it will make travel times unrealistic
+            if network == "rcn" then
+                factor = 1.2
+            elseif network == "lcn" then
+                factor = 1.2
+            end
+        end
+	end
+    
+    way.speed = way.speed * factor 
+
+    -- name
+	if "" ~= ref and "" ~= name then
+		way.name = name .. ' / ' .. ref
+    elseif "" ~= ref then
+    	way.name = ref
+	elseif "" ~= name then
+		way.name = name
+	else
+        if route_name then
+            way.name = route_name
+        else
+    		way.name = "{highway:"..highway.."}"	-- if no name exists, use way type
+    		                                        -- this encoding scheme is excepted to be a temporary solution
+	    end
 	end
 
   -- Override speed settings if explicit forward/backward maxspeeds are given
