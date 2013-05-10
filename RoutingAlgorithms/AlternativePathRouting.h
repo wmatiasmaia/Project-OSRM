@@ -56,7 +56,7 @@ public:
 
     ~AlternativeRouting() {}
 
-    void operator()(const PhantomNodes & phantomNodePair, RawRouteData & rawRouteData) {
+    void operator()(PhantomNodes & phantomNodePair, RawRouteData & rawRouteData) {
         if(!phantomNodePair.AtLeastOnePhantomNodeIsUINTMAX() || phantomNodePair.PhantomNodesHaveEqualLocation()) {
             rawRouteData.lengthOfShortestPath = rawRouteData.lengthOfAlternativePath = INT_MAX;
             return;
@@ -181,6 +181,12 @@ public:
 
         //Unpack shortest path and alternative, if they exist
         if(INT_MAX != upper_bound_to_shortest_path_distance) {
+            // set mode of first instruction
+            // if the best route started from the opposite edge, use mode2 rather than mode1
+            if( packedShortestPath.front() == phantomNodePair.startPhantom.edgeBasedNode+1 ) {
+                phantomNodePair.startPhantom.mode1 = phantomNodePair.startPhantom.mode2;
+            }
+
             super::UnpackPath(packedShortestPath, rawRouteData.computedShortestPath);
             rawRouteData.lengthOfShortestPath = upper_bound_to_shortest_path_distance;
         } else {
