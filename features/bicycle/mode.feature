@@ -109,3 +109,43 @@ Feature: Bike - Mode flag
      	 | f    | b  | df,bcd    | 1,2   |
      	 | a    | d  | ab,bcd    | 1,2   |
      	 | b    | f  | bcd,df    | 2,1   |
+
+     Scenario: Bike - Mode when pushing on steps
+     	Given the node map
+     	 | a | b |   |   |
+     	 |   | c | d | f |
+
+     	And the ways
+    	 | nodes | highway |
+    	 | ab    | primary |
+    	 | bc    | steps   |
+    	 | cd    | primary |
+
+     	When I route I should get
+    	 | from | to | route    | turns                       | modes |
+    	 | a    | d  | ab,bc,cd | head,right,left,destination | 1,2,1 |
+    	 | d    | a  | cd,bc,ab | head,right,left,destination | 1,2,1 |
+    	 | c    | a  | bc,ab    | head,left,destination       | 2,1   |
+    	 | d    | b  | cd,bc    | head,right,destination      | 1,2   |
+    	 | a    | c  | ab,bc    | head,right,destination      | 1,2   |
+    	 | b    | d  | bc,cd    | head,left,destination       | 2,1   |
+
+     Scenario: Bike - Mode when bicycle=dismount
+     	Given the node map
+     	 | a | b |   |   |
+     	 |   | c | d | f |
+
+     	And the ways
+    	 | nodes | highway | bicycle  |
+    	 | ab    | primary |          |
+    	 | bc    | primary | dismount |
+    	 | cd    | primary |          |
+
+     	When I route I should get
+    	 | from | to | route    | turns                       | modes |
+    	 | a    | d  | ab,bc,cd | head,right,left,destination | 1,2,1 |
+    	 | d    | a  | cd,bc,ab | head,right,left,destination | 1,2,1 |
+    	 | c    | a  | bc,ab    | head,left,destination       | 2,1   |
+    	 | d    | b  | cd,bc    | head,right,destination      | 1,2   |
+    	 | a    | c  | ab,bc    | head,right,destination      | 1,2   |
+    	 | b    | d  | bc,cd    | head,left,destination       | 2,1   |

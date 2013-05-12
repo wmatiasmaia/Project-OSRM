@@ -187,6 +187,7 @@ function way_function (way)
 	local surface = way.tags:Find("surface")
 	local foot_forward = way.tags:Find("foot:forward")
 	local foot_backward = way.tags:Find("foot:backward")
+	local bicycle = way.tags:Find("bicycle")
 
 	-- name	
 	if "" ~= ref and "" ~= name then
@@ -325,6 +326,12 @@ function way_function (way)
 		way.backward.speed = bicycle_speeds["cycleway"]
 	end
     
+	-- dismount
+	if bicycle == "dismount" then
+        way.mode = mode_pushing
+        way.speed = walking_speed
+	end
+
     -- surfaces
     if surface_speeds[surface] then
         way.forward.speed = math.min(way.forward.speed, surface_speeds[surface])
