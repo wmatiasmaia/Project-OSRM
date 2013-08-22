@@ -84,19 +84,6 @@ int main (int argc, char * argv[]) {
 
         //std::cout << "fingerprint: " << UUID::GetInstance().GetUUID() << std::endl;
 
-/*
-Threads = 8
-IP = 0.0.0.0
-Port = 5000
-
-hsgrData=/Users/dennisluxen/Downloads/berlin-latest.osrm.hsgr
-nodesData=/Users/dennisluxen/Downloads/berlin-latest.osrm.nodes
-edgesData=/Users/dennisluxen/Downloads/berlin-latest.osrm.edges
-ramIndex=/Users/dennisluxen/Downloads/berlin-latest.osrm.ramIndex
-fileIndex=/Users/dennisluxen/Downloads/berlin-latest.osrm.fileIndex
-namesData=/Users/dennisluxen/Downloads/berlin-latest.osrm.names
-timestamp=/Users/dennisluxen/Downloads/berlin-latest.osrm.timestamp
-*/
         boost::unordered_map<const std::string,boost::filesystem::path> paths;
         std::string ip_address;
         int ip_port, requested_num_threads;
